@@ -19,3 +19,6 @@ target_link_libraries(velpub ${catkin_LIBRARIES})
 
 add_executable(grf_retriver src/grf_retriver.cpp)
 target_link_libraries(grf_retriver ${catkin_LIBRARIES})
+
+add_executable(localplansub src/localplansub.cpp)
+target_link_libraries(localplansub ${catkin_LIBRARIES})
