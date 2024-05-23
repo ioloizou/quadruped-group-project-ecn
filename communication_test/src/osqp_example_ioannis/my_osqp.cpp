@@ -11,7 +11,7 @@ double g = 9.81;
 const int LEGS = 4;
 const int NUM_STATE = 13; // 3 for position, 3 for velocity, 3 for orientation, 3 for angular velocity + 1 to add the gravity term
 const int NUM_DOF = 3 * LEGS; // 1 GRF for each foot which is 3x1 vector so 3*LEGS = 12
-const Eigen::Matrix<double, 3, LEGS> foot_positions = Eigen::Matrix<double, 3, LEGS>::Zero(); // 3x4 matrix
+const Eigen::Matrix<double, 3, LEGS> foot_positions = Eigen::Matrix<double, 3, LEGS>::Random(); // 3x4 matrix
 
 const int HORIZON_LENGTH = 10; // 10 steps
 const double dt = 0.01; // 0.01 seconds
@@ -101,12 +101,14 @@ public:
             B_matrix_continuous.block<3, 3>(6, 3*i) = A1_INERTIA_WORLD.inverse() * skew_symmetric_foot_position;
             B_matrix_continuous.block<3, 3>(9, 3*i) = Eigen::Matrix3d::Identity() * (1/ROBOT_MASS);
         }
+        std::cout << "B_matrix_continuous: \n" << B_matrix_continuous << std::endl;
         return B_matrix_continuous;
     }
 
     void setBMatrixDiscrete(Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_continuous)
     {
         B_matrix_discrete = B_matrix_continuous * dt;
+        std::cout << "B_matrix_discrete: \n" << B_matrix_discrete << std::endl;
     }
 
     void setEqualityConstraints()
@@ -156,6 +158,7 @@ int main(){
     mpc.setAMatrixContinuous(Rotation_z);
     mpc.setAMatrixDiscrete(mpc.A_matrix_continuous);
     mpc.setBMatrixContinuous();
+    mpc.setBMatrixDiscrete(mpc.B_matrix_continuous);
 
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration = end - start;
