@@ -9,6 +9,7 @@ double g = 9.81;
 const int NUM_STATE = 12; // 3 for position, 3 for velocity, 3 for orientation, 3 for angular velocity
 const int NUM_INPUT = 4; // 4 for the control inputs 1 GRF for each foot
 const int HORIZON_LENGTH = 10; // 10 steps
+const double dt = 0.01; // 0.01 seconds
 
 class MPC{
 public:
@@ -29,7 +30,7 @@ public:
      */
     void initMatricesZero(){
         A_matrix_continuous = Eigen::Matrix<double, NUM_STATE, NUM_STATE>::Zero();
-        A_matrix_discrete = Eigen::Matrix3d::Zero();
+        A_matrix_discrete = Eigen::Matrix<double, NUM_STATE, NUM_STATE>::Zero();
     }
     
     /**
@@ -56,17 +57,23 @@ public:
     void setRMatrix()
     {}
 
-    void setAMatrixContinious(Eigen::Matrix3d Rotation_z)
+    auto setAMatrixContinuous(Eigen::Matrix3d Rotation_z)
     {
         A_matrix_continuous.block<3, 3>(0, 6) = Rotation_z;
         A_matrix_continuous.block<3, 3>(3, 9) = Eigen::Matrix3d::Identity();
         std::cout << "A_matrix_continuous: \n" << A_matrix_continuous << std::endl;
+
+        return A_matrix_continuous;
     }
 
-    void setAMatrixDiscrete()
-    {}
+    void setAMatrixDiscrete(Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_continuous)
+    {
+        // First order approximation of the matrix exponential
+        A_matrix_discrete = Eigen::Matrix<double, NUM_STATE, NUM_STATE>::Identity(12, 12) + A_matrix_continuous * dt;
+        std::cout << "A_matrix_discrete: \n" << A_matrix_discrete << std::endl;
+    }
 
-    void setBMatrixContinious()
+    void setBMatrixContinuous()
     {}
 
     void setBMatrixDiscrete()
@@ -103,7 +110,7 @@ public:
 
     //Matrices declaration
     Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_continuous;
-    Eigen::Matrix3d A_matrix_discrete;
+    Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_discrete;
 
 };
 
@@ -112,7 +119,8 @@ int main(){
     MPC mpc;
     mpc.initMatricesZero();
     auto Rotation_z = mpc.setRotationMatrix(Eigen::Vector3d(0.5, 0.7, 0.6));
-    mpc.setAMatrixContinious(Rotation_z);
+    mpc.setAMatrixContinuous(Rotation_z);
+    mpc.setAMatrixDiscrete(mpc.A_matrix_continuous);
 
     return 0;
 }
