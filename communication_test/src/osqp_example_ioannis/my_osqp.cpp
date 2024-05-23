@@ -103,7 +103,7 @@ public:
         }
     }
 
-    void setBMatrixDiscrete()
+    void setBMatrixDiscrete(Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_continuous)
     {
         B_matrix_discrete = B_matrix_continuous * dt;
     }
