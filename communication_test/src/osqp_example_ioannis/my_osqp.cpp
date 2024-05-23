@@ -91,7 +91,7 @@ public:
         // std::cout << "A_matrix_discrete: \n" << A_matrix_discrete << std::endl;
     }
 
-    void setBMatrixContinuous(Eigen::Matrix3d foot_positions)
+    auto setBMatrixContinuous()
     {
         for (int i=0; i<LEGS; i++)
         {
@@ -101,6 +101,7 @@ public:
             B_matrix_continuous.block<3, 3>(6, 3*i) = A1_INERTIA_WORLD.inverse() * skew_symmetric_foot_position;
             B_matrix_continuous.block<3, 3>(9, 3*i) = Eigen::Matrix3d::Identity() * (1/ROBOT_MASS);
         }
+        return B_matrix_continuous;
     }
 
     void setBMatrixDiscrete(Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_continuous)
@@ -154,7 +155,7 @@ int main(){
     auto Rotation_z = mpc.setRotationMatrix(Eigen::Vector3d(0.5, 0.7, 0.6));
     mpc.setAMatrixContinuous(Rotation_z);
     mpc.setAMatrixDiscrete(mpc.A_matrix_continuous);
-    mpc.setBMatrixContinuous(foot_positions);
+    mpc.setBMatrixContinuous();
 
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration = end - start;
