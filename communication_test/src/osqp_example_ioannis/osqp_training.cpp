@@ -63,9 +63,6 @@ void castMPCToQPHessian(const Eigen::DiagonalMatrix<double, 12>& Q,
                         Eigen::SparseMatrix<double>& hessianMatrix)
 {
 
-    hessianMatrix.resize(12 * (mpcWindow + 1) + 4 * mpcWindow,
-                         12 * (mpcWindow + 1) + 4 * mpcWindow);
-
     // populate hessian matrix
     for (int i = 0; i < 12 * (mpcWindow + 1) + 4 * mpcWindow; i++)
     {

@@ -45,11 +45,19 @@ target_link_libraries(localplansub ${catkin_LIBRARIES})
 # add_executable(main src/ipopt_example_ioannis/main.cpp)
 # target_link_libraries(main ${catkin_LIBRARIES})
 
+
+# link_directories(/usr/local/lib)
+# target_link_libraries(main ipopt)
+
 add_executable(osqp_training src/osqp_example_ioannis/osqp_training.cpp)
 target_link_libraries(osqp_training ${catkin_LIBRARIES})
 target_link_libraries(osqp_training OsqpEigen::OsqpEigen)
 
+add_executable(my_osqp src/osqp_example_ioannis/my_osqp.cpp)
+target_link_libraries(my_osqp ${catkin_LIBRARIES})
+target_link_libraries(my_osqp OsqpEigen::OsqpEigen)
 
-# link_directories(/usr/local/lib)
-# target_link_libraries(main ipopt)
+add_executable(cpp_experimentation src/cpp_experimentation.cpp)
+target_link_libraries(cpp_experimentation ${catkin_LIBRARIES})
+target_link_libraries(cpp_experimentation OsqpEigen::OsqpEigen)
 
