@@ -48,6 +48,7 @@ public:
         A_matrix_discrete = Eigen::Matrix<double, NUM_STATE, NUM_STATE>::Zero();
         B_matrix_continuous = Eigen::Matrix<double, NUM_STATE, NUM_DOF>::Zero();
         B_matrix_discrete = Eigen::Matrix<double, NUM_STATE, NUM_DOF>::Zero();
+        Aqp_matrix = Eigen::Matrix<double, NUM_STATE*HORIZON_LENGTH, NUM_STATE>::Zero();
     }
     
     /**
@@ -89,12 +90,13 @@ public:
         {
             R_matrix.insert(i, i) = 2 * r_weights(i % NUM_DOF);
         }
-        std::cout << "R_matrix: \n" << R_matrix << std::endl;
+        // std::cout << "R_matrix: \n" << R_matrix << std::endl;
     }
 
     
     auto setAMatrixContinuous(Eigen::Matrix3d Rotation_z)
     {
+        // Using the paper A matrix as reference
         A_matrix_continuous.block<3, 3>(0, 6) = Rotation_z;
         A_matrix_continuous.block<3, 3>(3, 9) = Eigen::Matrix3d::Identity();
         A_matrix_continuous(11, 12) = 1; // Because of the augmented gravity term in the state space model
@@ -103,17 +105,19 @@ public:
         return A_matrix_continuous;
     }
 
-    void setAMatrixDiscrete(Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_continuous)
+    auto setAMatrixDiscrete(Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_continuous)
     {
         // First order approximation of the matrix exponential
         A_matrix_discrete = Eigen::Matrix<double, NUM_STATE, NUM_STATE>::Identity(NUM_STATE, NUM_STATE) + A_matrix_continuous * dt;
         // std::cout << "A_matrix_discrete: \n" << A_matrix_discrete << std::endl;
+        return A_matrix_discrete;
     }
 
     auto setBMatrixContinuous()
     {
         for (int i=0; i<LEGS; i++)
         {
+            // Using the paper B matrix as reference
             Eigen::Vector3d r = foot_positions.col(i);
             Eigen::Matrix3d skew_symmetric_foot_position;
             vectorToSkewSymmetric(r, skew_symmetric_foot_position);
@@ -130,8 +134,25 @@ public:
         // std::cout << "B_matrix_discrete: \n" << B_matrix_discrete << std::endl;
     }
 
-    void setEqualityConstraints()
-    {}
+    void setAqpMatrix(Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_discrete)
+    {
+        for (int i = 0; i < HORIZON_LENGTH; i++)
+        {
+            if (i == 0)
+            {   // First block is the A_discrete matrix
+                Aqp_matrix.block<NUM_STATE, NUM_STATE>(i * NUM_STATE, 0) = A_matrix_discrete;
+            }
+            else   
+            {  // The current block is the evolution of the previous block A(k+2) = A(k+1) * A(k)
+                Aqp_matrix.block<NUM_STATE, NUM_STATE>(i * NUM_STATE, 0) = Aqp_matrix.block<NUM_STATE, NUM_STATE>((i - 1) * NUM_STATE, 0) * A_matrix_discrete;
+            }
+        }
+        std::cout << "Aqp_matrix: \n" << Aqp_matrix << std::endl;
+    }
+
+    void setBqpMatrix()
+    {
+    }
 
     void setInequalityConstraints()
     {}
@@ -166,6 +187,7 @@ public:
     Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_discrete;
     Eigen::SparseMatrix<double> Q_matrix;
     Eigen::SparseMatrix<double> R_matrix;
+    Eigen::Matrix<double, NUM_STATE*HORIZON_LENGTH, NUM_STATE> Aqp_matrix;
 
 };
 
@@ -187,6 +209,7 @@ int main(){
     mpc.setAMatrixDiscrete(mpc.A_matrix_continuous);
     mpc.setBMatrixContinuous();
     mpc.setBMatrixDiscrete(mpc.B_matrix_continuous);
+    mpc.setAqpMatrix(mpc.A_matrix_discrete);
 
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration = end - start;
