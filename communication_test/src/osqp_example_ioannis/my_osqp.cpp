@@ -1,5 +1,6 @@
 #include "OsqpEigen/OsqpEigen.h"
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
 
 #include <cmath>
 #include <iostream>
@@ -68,17 +69,35 @@ public:
         return Rotation_z;
     }
 
-    void setQMatrix()
-    {}
+    void setQMatrix(Eigen::VectorXd &q_weights)
+    {
+        // It doesnt let us declare size at the start so we need to initialize it here
+        Q_matrix = Eigen::SparseMatrix<double>(NUM_STATE * HORIZON_LENGTH, NUM_STATE * HORIZON_LENGTH);
+        for (int i = 0; i < NUM_STATE * HORIZON_LENGTH; i++)
+        {
+            // We insert weights in the diagonal of the matrix but we multiply by 2 
+            // because the QP solver expects a 0.5 factor in front of the quadratic term
+            Q_matrix.insert(i, i) = 2 * q_weights(i % NUM_STATE);
+        }
+        // std::cout << "Q_matrix: \n" << Q_matrix << std::endl;
+    }
 
-    void setRMatrix()
-    {}
+    void setRMatrix(Eigen::VectorXd &r_weights)
+    {
+        R_matrix = Eigen::SparseMatrix<double>(NUM_DOF * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH);
+        for (int i = 0; i < NUM_DOF * HORIZON_LENGTH; i++)
+        {
+            R_matrix.insert(i, i) = 2 * r_weights(i % NUM_DOF);
+        }
+        std::cout << "R_matrix: \n" << R_matrix << std::endl;
+    }
 
     
     auto setAMatrixContinuous(Eigen::Matrix3d Rotation_z)
     {
         A_matrix_continuous.block<3, 3>(0, 6) = Rotation_z;
         A_matrix_continuous.block<3, 3>(3, 9) = Eigen::Matrix3d::Identity();
+        A_matrix_continuous(11, 12) = 1; // Because of the augmented gravity term in the state space model
         // std::cout << "A_matrix_continuous: \n" << A_matrix_continuous << std::endl;
 
         return A_matrix_continuous;
@@ -101,14 +120,14 @@ public:
             B_matrix_continuous.block<3, 3>(6, 3*i) = A1_INERTIA_WORLD.inverse() * skew_symmetric_foot_position;
             B_matrix_continuous.block<3, 3>(9, 3*i) = Eigen::Matrix3d::Identity() * (1/ROBOT_MASS);
         }
-        std::cout << "B_matrix_continuous: \n" << B_matrix_continuous << std::endl;
+        // std::cout << "B_matrix_continuous: \n" << B_matrix_continuous << std::endl;
         return B_matrix_continuous;
     }
 
     void setBMatrixDiscrete(Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_continuous)
     {
         B_matrix_discrete = B_matrix_continuous * dt;
-        std::cout << "B_matrix_discrete: \n" << B_matrix_discrete << std::endl;
+        // std::cout << "B_matrix_discrete: \n" << B_matrix_discrete << std::endl;
     }
 
     void setEqualityConstraints()
@@ -145,6 +164,8 @@ public:
     Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_discrete;
     Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_continuous;
     Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_discrete;
+    Eigen::SparseMatrix<double> Q_matrix;
+    Eigen::SparseMatrix<double> R_matrix;
 
 };
 
@@ -154,6 +175,13 @@ int main(){
 
     MPC mpc;
     mpc.initMatricesZero();
+
+    Eigen::VectorXd q_weights = Eigen::VectorXd::Ones(NUM_STATE);
+    mpc.setQMatrix(q_weights);
+
+    Eigen::VectorXd r_weights = Eigen::VectorXd::Ones(NUM_DOF);
+    mpc.setRMatrix(r_weights);
+
     auto Rotation_z = mpc.setRotationMatrix(Eigen::Vector3d(0.5, 0.7, 0.6));
     mpc.setAMatrixContinuous(Rotation_z);
     mpc.setAMatrixDiscrete(mpc.A_matrix_continuous);
