@@ -48,7 +48,8 @@ public:
         A_matrix_discrete = Eigen::Matrix<double, NUM_STATE, NUM_STATE>::Zero();
         B_matrix_continuous = Eigen::Matrix<double, NUM_STATE, NUM_DOF>::Zero();
         B_matrix_discrete = Eigen::Matrix<double, NUM_STATE, NUM_DOF>::Zero();
-        Aqp_matrix = Eigen::Matrix<double, NUM_STATE*HORIZON_LENGTH, NUM_STATE>::Zero();
+        Aqp_matrix = Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_STATE>::Zero();
+        Bqp_matrix = Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH>::Zero();
     }
     
     /**
@@ -128,13 +129,14 @@ public:
         return B_matrix_continuous;
     }
 
-    void setBMatrixDiscrete(Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_continuous)
+    auto setBMatrixDiscrete(Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_continuous)
     {
         B_matrix_discrete = B_matrix_continuous * dt;
         // std::cout << "B_matrix_discrete: \n" << B_matrix_discrete << std::endl;
+        return B_matrix_discrete;
     }
 
-    void setAqpMatrix(Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_discrete)
+    auto setAqpMatrix(Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_discrete)
     {
         for (int i = 0; i < HORIZON_LENGTH; i++)
         {
@@ -147,11 +149,26 @@ public:
                 Aqp_matrix.block<NUM_STATE, NUM_STATE>(i * NUM_STATE, 0) = Aqp_matrix.block<NUM_STATE, NUM_STATE>((i - 1) * NUM_STATE, 0) * A_matrix_discrete;
             }
         }
-        std::cout << "Aqp_matrix: \n" << Aqp_matrix << std::endl;
+        // std::cout << "Aqp_matrix: \n" << Aqp_matrix << std::endl;
+        return Aqp_matrix;
     }
 
-    void setBqpMatrix()
+    void setBqpMatrix(Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_discrete, Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_STATE> Aqp_matrix)
     {
+        for (int i = 0; i< HORIZON_LENGTH; i++)
+        {
+            for (int j=0; j<= i; j++){
+                if (i - j== 0)
+                {   // The diagonal blocks are the B_discrete matrix
+                    Bqp_matrix.block<NUM_STATE, NUM_DOF>(i * NUM_STATE, 0) = B_matrix_discrete;
+                }
+                else
+                {   // I am not sure about this part
+                    Bqp_matrix.block<NUM_STATE, NUM_DOF>(i * NUM_STATE, j * NUM_DOF) = Aqp_matrix.block<NUM_STATE, NUM_STATE>((i -j - 1) * NUM_STATE, 0) * B_matrix_discrete;
+                }
+            }
+        }
+        std::cout << "Bqp_matrix: \n" << Bqp_matrix << std::endl;
     }
 
     void setInequalityConstraints()
@@ -187,7 +204,8 @@ public:
     Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_discrete;
     Eigen::SparseMatrix<double> Q_matrix;
     Eigen::SparseMatrix<double> R_matrix;
-    Eigen::Matrix<double, NUM_STATE*HORIZON_LENGTH, NUM_STATE> Aqp_matrix;
+    Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_STATE> Aqp_matrix;
+    Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH> Bqp_matrix;
 
 };
 
@@ -210,6 +228,7 @@ int main(){
     mpc.setBMatrixContinuous();
     mpc.setBMatrixDiscrete(mpc.B_matrix_continuous);
     mpc.setAqpMatrix(mpc.A_matrix_discrete);
+    mpc.setBqpMatrix(mpc.B_matrix_discrete, mpc.Aqp_matrix);
 
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration = end - start;
