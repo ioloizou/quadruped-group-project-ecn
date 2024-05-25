@@ -7,12 +7,12 @@
 #include <chrono>
 
 // Constants - I declared here because inside the class does not work
-double g = 9.81;
+double g = 9.81; // m/s^2
 
 const int LEGS = 4;
 const int NUM_STATE = 13; // 3 for position, 3 for velocity, 3 for orientation, 3 for angular velocity + 1 to add the gravity term
 const int NUM_DOF = 3 * LEGS; // 1 GRF for each foot which is 3x1 vector so 3*LEGS = 12
-const Eigen::Matrix<double, 3, LEGS> foot_positions = Eigen::Matrix<double, 3, LEGS>::Random(); // 3x4 matrix
+const Eigen::Matrix<double, 3, LEGS> foot_positions = Eigen::Matrix<double, 3, LEGS>::Random(); // 3x4 matrix with random values until we get the real values
 
 const int HORIZON_LENGTH = 10; // 10 steps
 const double dt = 0.01; // 0.01 seconds
@@ -31,9 +31,11 @@ public:
     
     // Constructor
     MPC(){
-        mu = 0.8;
-        fz_min = 0.1;
-        fz_max = 1000;
+        // Parameters initialization with values form paper
+        mu = 0.6;
+        fz_min = 10;
+        fz_max = 666;
+        states = Eigen::VectorXd::Random(NUM_STATE); // Dummy values until we get the real states
     }
    
     /**
@@ -153,6 +155,7 @@ public:
         return Aqp_matrix;
     }
 
+    // Jumps from 2 milliseconds to 30. NEEDS optimization!
     void setBqpMatrix(Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_discrete, Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_STATE> Aqp_matrix)
     {
         for (int i = 0; i< HORIZON_LENGTH; i++)
@@ -171,7 +174,11 @@ public:
         std::cout << "Bqp_matrix: \n" << Bqp_matrix << std::endl;
     }
 
-    void setInequalityConstraints()
+    // OSQP QP formulation
+    // minimize 0.5 * x^T * P * x + q^T * x
+    // subject to l <= A * x <= u
+    // So every constain equality and inequality need to be converted to this form
+    void setAcMatrix()
     {}
 
     void setBounds()
@@ -196,6 +203,7 @@ public:
     double mu;
     double fz_min;
     double fz_max;
+    Eigen::VectorXd states; // Dummy values until we get the real states
 
     //Matrices declaration
     Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_continuous;
@@ -207,6 +215,7 @@ public:
     Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_STATE> Aqp_matrix;
     Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH> Bqp_matrix;
 
+    // Eigen::Matrix<double,
 };
 
 int main(){
