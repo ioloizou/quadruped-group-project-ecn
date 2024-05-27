@@ -7,7 +7,7 @@
 #include <chrono>
 
 // Constants - I declared here because inside the class does not work
-double g = 9.81; // m/s^2
+const double g = 9.81; // m/s^2
 
 const int LEGS = 4;
 const int NUM_STATE = 13; // 3 for position, 3 for velocity, 3 for orientation, 3 for angular velocity + 1 to add the gravity term
@@ -17,8 +17,11 @@ const Eigen::Matrix<double, 3, LEGS> foot_positions = Eigen::Matrix<double, 3, L
 const int HORIZON_LENGTH = 10; // 10 steps
 const double dt = 0.01; // 0.01 seconds
 
+const int NUM_BOUNDS = 5; //4 bounds, since we divided each inequality constraint into 2 bounds + the contact equality constraint (maybe this needs to be generalized and not a fixed number later on)
+
 const Eigen::Matrix3d A1_INERTIA_WORLD = Eigen::Matrix3d::Identity(); // Inertia matrix of the robot in the world frame
 const double ROBOT_MASS = 10; // 10 kg
+
 
 void vectorToSkewSymmetric(Eigen::Vector3d vector, Eigen::Matrix3d &skew_symmetric){
     skew_symmetric << 0, -vector(2), vector(1),
@@ -31,11 +34,13 @@ public:
     
     // Constructor
     MPC(){
-        // Parameters initialization with values form paper
+        // Parameters initialization with values from paper
         mu = 0.6;
         fz_min = 10;
         fz_max = 666;
         states = Eigen::VectorXd::Random(NUM_STATE); // Dummy values until we get the real states
+        states_reference = Eigen::VectorXd::Random(NUM_STATE); // Dummy values until we get the real states
+        U = Eigen::VectorXd::Random(NUM_DOF*HORIZON_LENGTH);
     }
    
     /**
@@ -52,6 +57,8 @@ public:
         B_matrix_discrete = Eigen::Matrix<double, NUM_STATE, NUM_DOF>::Zero();
         Aqp_matrix = Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_STATE>::Zero();
         Bqp_matrix = Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH>::Zero();
+        Ac_matrix = Eigen::Matrix<double, NUM_BOUNDS * LEGS, NUM_DOF>::Zero();
+
     }
     
     /**
@@ -171,27 +178,119 @@ public:
                 }
             }
         }
-        std::cout << "Bqp_matrix: \n" << Bqp_matrix << std::endl;
+        // std::cout << "Bqp_matrix: \n" << Bqp_matrix << std::endl;
     }
 
     // OSQP QP formulation
     // minimize 0.5 * x^T * P * x + q^T * x
     // subject to l <= A * x <= u
     // So every constain equality and inequality need to be converted to this form
-    void setAcMatrix()
-    {}
+    
+    /**
+    This Function builds the A matrix in OSQP Notation
+    Our MPC problem has 3 Inequality constraints and 1 equality constraint, they are:
+    -mu*fz <= fx <= mu*fz, which becomes (-inf <= fx-mu*fz <= 0) && (0 <= fx + mu*fz <= inf). The constraint is divided into two bounds to fit OSQP default formulation
+    -mu*fz <= fy <= mu*fz, which becomes (-inf <= fy-mu*fz <= 0) && (0 <= fy + mu*fz <= inf)
+    Di*ui = 0; Here the switch is taken care of in the bounds, so our constraint becomes fzmin*switch <= fz <= fzmax*switch (and this also includes the 3rd inequality constraint)
+    fmin <= fz <= fmax
 
+    *@param[in] = g_block; - Matrix that will be repeatedly added to Ac to account for the constraints we defined in each leg
+    *@param[in] = Ac_Matrix; - Sparse matrix populated with g_block in its diagonal
+    *@param[out] = Updated Ac_matrix
+    *@returns = none
+    */
+    void setAcMatrix(){
+        //Not sure this is the best way to do this, will leave it like that and think of a way to better generalize it:
+        g_block << 1,0,mu,  // fx + mu*fz
+                   1,0,-mu, // fx - mu*fz
+                   0,1,mu,  // fy + mu*fz
+                   0,1,-mu, // fy - mu*fz
+                   0,0,1;   // min max fz/contact constraint (just take into bounds of fz if foot is on ground)
+
+        for (int i = 0; i < LEGS; i++){ 
+            Ac_matrix.block<NUM_BOUNDS, NUM_DOF/LEGS>(i*NUM_BOUNDS, i*(NUM_DOF/LEGS)) = g_block;
+        }
+        // Ac_matrix = Ac_matrix.sparseView();
+
+        // std::cout << "Ac_matrix: \n" << Ac_matrix << std::endl;
+    }
+
+    /**
+    This Function builds the bounds for the OSQP problem
+    **/
     void setBounds()
-    {}
+    {
+        // Declaring the lower and upper bounds
+        Eigen::VectorXd lower_bounds(NUM_BOUNDS * LEGS);
+        Eigen::VectorXd upper_bounds(NUM_BOUNDS * LEGS);
+        
+        // Setting the bounds for each leg
+        for (int i=0; i<LEGS; i++)
+        {
+            lower_bounds.segment<5>(i*NUM_BOUNDS) << 0,                 //  0        <= fx + mu*fz
+                                                     -Eigen::Infinity,  // -infinity <= fx - mu*fz
+                                                     0,                 //  0        <= fy + mu*fz
+                                                     -Eigen::Infinity,  // -infinity <= fy - mu*fz
+                                                     fz_min;            //  fz_min   <= fz          fz_min*contact = 0 or 1 depending on the contact
+                                                     
+            upper_bounds.segment<5>(i*NUM_BOUNDS) << Eigen::Infinity,   //  fx + mu*fz <= infinity
+                                                     0,                 //  fx - mu*fz <= 0
+                                                     Eigen::Infinity,   //  fy + mu*fz <= infinity
+                                                     0,                 //  fy - mu*fz <= 0
+                                                     fz_max; //         //          fz <= fz_max    fz_max*contact = 0 or 1 depending on the contact
+        }
 
-    void setGradient()
-    {}
+        // Creating horizon bounds
+        Eigen::VectorXd lower_bounds_horizon = Eigen::VectorXd::Zero(NUM_BOUNDS * LEGS * HORIZON_LENGTH);
+        Eigen::VectorXd upper_bounds_horizon = Eigen::VectorXd::Zero(NUM_BOUNDS * LEGS * HORIZON_LENGTH);
+        
+        for (int i=0; i<HORIZON_LENGTH; i++)
+        {
+            lower_bounds_horizon.segment<NUM_BOUNDS * LEGS>(i*NUM_BOUNDS*LEGS) = lower_bounds;
+            upper_bounds_horizon.segment<NUM_BOUNDS * LEGS>(i*NUM_BOUNDS*LEGS) = upper_bounds;
+        }
+        // std::cout<<"Lower bounds: \n"<<lower_bounds_horizon<<std::endl;
+        // std::cout<<"Upper bounds: \n"<<upper_bounds_horizon<<std::endl;
+    }
 
-    void setHessian()
-    {}
+    // void setGradient()
+    // {
+    //     // Gradient calculated from the quadratic cost function
+    //     // Proof on Miro
+    //     gradient = (Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix)*states + 2*Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix * states - states_reference);
+    //     //B_qp^T = 120x130          //B_qp^T = 120x130
+    //     // Q = 130*130              //Q = 130x130
+    //     //B_qp = 130x120            //A_qp = 130x13
+    //     //R = 120x120               //States = 120x1
+    //                                 //States_ref = 120x1
+    //     std::cout << "Gradient: \n" << gradient << std::endl;
+    // }
 
-    void setInitialGuess()
-    {}
+    // void setHessian()
+    // {   
+    //     // Hessian caclulated form the quadratic cost function
+    //     // Proof on Miro
+    //     hessian = Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix;
+    //     std::cout << "Hessian: \n" << hessian << std::endl;
+    // }
+
+    /** This function sets the initial guess for the solver.
+    If the solver is running for the first time, the initial guess is a vector of zeros.
+    If it is the second or higher iterations, the initial guess is a hot-start with the previous iteration's minimizer
+    @param[in] = None
+    @param[out] = The initial guess for the solver
+    @returns = None
+    */    
+    // void setInitialGuess(){
+    //     Eigen::VectorXd initial_guess = Eigen::VectorXd::Zero(NUM_STATE-1);
+    //     if (is_first_run == false){
+    //         //Retrieve the last minimizer correctly, for now it is a random vector
+    //         //Goal is to have: initial_guess = last_minimizer
+    //         initial_guess.setRandom();
+    //     }
+
+    //     std::cout << "Initial Guess: \n" << initial_guess << std::endl;
+    // }
 
     void solveQP()
     {}
@@ -204,7 +303,9 @@ public:
     double fz_min;
     double fz_max;
     Eigen::VectorXd states; // Dummy values until we get the real states
-
+    Eigen::VectorXd states_reference; // Dummy values until we get the real states
+    Eigen::VectorXd U;
+    
     //Matrices declaration
     Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_continuous;
     Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_discrete;
@@ -214,8 +315,17 @@ public:
     Eigen::SparseMatrix<double> R_matrix;
     Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_STATE> Aqp_matrix;
     Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH> Bqp_matrix;
+    
 
-    // Eigen::Matrix<double,
+    Eigen::Matrix<double,NUM_BOUNDS , NUM_DOF/LEGS> g_block;
+    Eigen::Matrix<double,NUM_BOUNDS * LEGS, NUM_DOF> Ac_matrix;
+
+    Eigen::Matrix<double, NUM_DOF * HORIZON_LENGTH, 1> gradient;
+    Eigen::Matrix<double, NUM_DOF * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH> hessian;
+
+    
+
+    bool is_first_run = true;  //to be set to false after first iteration, so that the initial guess is correctly set to hot-start the solver
 };
 
 int main(){
@@ -238,6 +348,11 @@ int main(){
     mpc.setBMatrixDiscrete(mpc.B_matrix_continuous);
     mpc.setAqpMatrix(mpc.A_matrix_discrete);
     mpc.setBqpMatrix(mpc.B_matrix_discrete, mpc.Aqp_matrix);
+    mpc.setAcMatrix();
+    mpc.setBounds();
+    // mpc.setGradient();
+    // mpc.setHessian();
+    // mpc.setInitialGuess();
 
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration = end - start;
