@@ -6,7 +6,35 @@
 #include <iostream>
 #include <chrono>
 
-// Constants - I declared here because inside the class does not work
+/**
+ * Constants - Declared here because inside the class does not work
+ * 
+ * g = acceleration of gravity (9.81 [m/s^2])
+ * 
+ * LEGS = Number of legs of the robot (4)
+ * 
+ * NUM_STATE = dimension of state vector (X, Y, Z, Vx, Vy, Vz, θx, θy, θz wx, wy, wz, g)
+ *                                       (position, lin. vel., orientation, ang. velocity, gravity)
+ *                                       due to the extension to hold the gravity term it comes to dimension 13
+ * 
+ * NUM_DOF = Each foot has 1 GRF (which is a 3x1 vector), therefore NUM_DOF = 3*LEGS = 12
+ * 
+ * foot_positions = 3x4 matrix to hold the xyz coords of each foot. (in the body frame?)
+ * 
+ * HORIZON_LENGTH = number of steps in the horizon (10)
+ * 
+ * dt = time step (0.01 [seconds])
+ * 
+ * NUM_BOUNDS = Number of bounds for the constraints. In our case 5 since we had to divide each inequality
+ *                                                    into 2 bounds (4) + the contact constraint.
+ *                                                   (Decide if there is a way to generalize this or user inputs a constant)
+ * 
+ * A1_INERTIA_WORLD = Inertia Matrix of the robot in the world frame [kg*m/s^2].
+ * 
+ * ROBOT_MASS = Mass of the robot (10 [kg])
+*/
+
+//Constants - I declared here because inside the class does not work
 const double g = 9.81; // m/s^2
 
 const int LEGS = 4;
@@ -22,7 +50,16 @@ const int NUM_BOUNDS = 5; //4 bounds, since we divided each inequality constrain
 const Eigen::Matrix3d A1_INERTIA_WORLD = Eigen::Matrix3d::Identity(); // Inertia matrix of the robot in the world frame
 const double ROBOT_MASS = 10; // 10 kg
 
-
+/**
+ * @brief This function converts a 3D vector into a skew-symmetric matrix
+ * 
+ * @param[in] = vector - 3D vector to be converted.
+ * @param[in] = skew_symmetric - The skew symmetric matrix to be populated by the vector components
+ * 
+ * @param[out] = skew_symmetric - The updated skew symmetric matrix.
+ * 
+ * @returns = None
+*/
 void vectorToSkewSymmetric(Eigen::Vector3d vector, Eigen::Matrix3d &skew_symmetric){
     skew_symmetric << 0, -vector(2), vector(1),
                       vector(2), 0, -vector(0),
@@ -62,10 +99,10 @@ public:
     }
     
     /**
-     * @brief Sets the rotation matrix based on the given Euler angles.
+     * @brief Sets the rotation matrix (from body to world frame) based on the given Euler angles.
      * The robot’s orientation is expressed as a vector of Z-Y-X Euler angles Θ = [φ θ ψ]ᵀ where ψ is the yaw, θ is the pitch, and φ is the roll.
      * 
-     * @param euler_angles The Euler angles representing the rotation of the body respect to the inertial/world frame?
+     * @param euler_angles The Euler angles representing the rotation of the body respect to the inertial/world frame.
      */
     Eigen::Matrix3d setRotationMatrix(Eigen::Vector3d euler_angles){
         double psi = euler_angles(2);
@@ -80,6 +117,15 @@ public:
         return Rotation_z;
     }
 
+    /**
+     * @brief This function initializes a diagonal matrix for weights on the state error
+     * It populates Q_matrix with q_weights in its diagonal entries.
+     * 
+     * @param[in] = q_weights. A vector of weights to be populated in the diagonal of Q_matrix
+     * @param[out] = Q_matrix. The Q_matrix for the cost function (diagonal)
+     * 
+     * @returns = None
+    */
     void setQMatrix(Eigen::VectorXd &q_weights)
     {
         // It doesnt let us declare size at the start so we need to initialize it here
@@ -93,6 +139,15 @@ public:
         // std::cout << "Q_matrix: \n" << Q_matrix << std::endl;
     }
 
+    /**
+     * @brief This function initializes a diagonal matrix for weights on the control inputs
+     * It populates R_matrix with r_weights in its diagonal entries.
+     * 
+     * @param[in] = r_weights. A vector of weights to be populated in the diagonal of R_matrix
+     * @param[out] = R_matrix. The R_matrix for the cost function (diagonal)
+     * 
+     * @returns = None
+    */    
     void setRMatrix(Eigen::VectorXd &r_weights)
     {
         R_matrix = Eigen::SparseMatrix<double>(NUM_DOF * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH);
@@ -103,8 +158,16 @@ public:
         // std::cout << "R_matrix: \n" << R_matrix << std::endl;
     }
 
-    
-    auto setAMatrixContinuous(Eigen::Matrix3d Rotation_z)
+    /**
+     * @brief This function initializes the A matrix of the state space in the continuous time domain
+     * The matrix is detailed in the repport
+     * 
+     * @param[in] = Rotation_z - The rotation matrix from body to world frame, around the Z axis.
+     * @param[out] = The A matrix in continuous time domain for the state space.
+     * 
+     * @returns = None
+    */
+    void setAMatrixContinuous(Eigen::Matrix3d Rotation_z)
     {
         // Using the paper A matrix as reference
         A_matrix_continuous.block<3, 3>(0, 6) = Rotation_z;
@@ -112,18 +175,41 @@ public:
         A_matrix_continuous(11, 12) = 1; // Because of the augmented gravity term in the state space model
         // std::cout << "A_matrix_continuous: \n" << A_matrix_continuous << std::endl;
 
-        return A_matrix_continuous;
     }
 
-    auto setAMatrixDiscrete(Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_continuous)
+    /**
+     * @brief This function initializes the A matrix of the state space in the discrete time domain
+     * The discretization is done by first order approximation of the matrix exponential: 
+     * A_discrete = I + A*dt
+     * 
+     * @param[in] = A_matrix_continuous (The matrix in continuous time domain)
+     * @param[in] = dt (the timestep)
+     * 
+     * @param[out] = A_matrix_discrete (The discretized A_matrix of the state space representation)
+     * 
+     * @returns = None
+    */
+    void setAMatrixDiscrete()
     {
-        // First order approximation of the matrix exponential
         A_matrix_discrete = Eigen::Matrix<double, NUM_STATE, NUM_STATE>::Identity(NUM_STATE, NUM_STATE) + A_matrix_continuous * dt;
         // std::cout << "A_matrix_discrete: \n" << A_matrix_discrete << std::endl;
-        return A_matrix_discrete;
+        
     }
 
-    auto setBMatrixContinuous()
+    /**
+     * TODO: Finish documenting this function with parameter description
+     * @brief This function sets the B matrix of the state space representation, in the continuous time domain.
+     * The matrix is detailed in the repport.
+     * 
+     * @param[in] = foot_positions - 
+     * @param[in] = A1_INERTIA_WORLD - Inertia matrix of the robot in the world frame
+     * @param[in] = ROBOT_MASS - Scalar holding the mass of the robot
+     * 
+     * @param[out] = B_matrix_continuous - the B matrix in the continuous time domain
+     * 
+     * @returns = None
+    */
+    void setBMatrixContinuous()
     {
         for (int i=0; i<LEGS; i++)
         {
@@ -135,41 +221,81 @@ public:
             B_matrix_continuous.block<3, 3>(9, 3*i) = Eigen::Matrix3d::Identity() * (1/ROBOT_MASS);
         }
         // std::cout << "B_matrix_continuous: \n" << B_matrix_continuous << std::endl;
-        return B_matrix_continuous;
     }
 
-    auto setBMatrixDiscrete(Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_continuous)
+    /**
+     * @brief This function sets the B matrix of the state space representation, in the discrete time domain.
+     * The discretization is done by scaling the B matrix by the timestep: 
+     * B_discrete = B*dt
+     * 
+     * @param[in] = B_matrix_continuous (The matrix in continuous time domain)
+     * @param[in] = dt (the timestep)
+     * 
+     * @param[out] = B_matrix_discrete (The discretized B_matrix of the state space representation)
+     * 
+     * @returns = None
+    */
+    void setBMatrixDiscrete()
     {
         B_matrix_discrete = B_matrix_continuous * dt;
         // std::cout << "B_matrix_discrete: \n" << B_matrix_discrete << std::endl;
-        return B_matrix_discrete;
     }
 
-    auto setAqpMatrix(Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_discrete)
+    /**
+     * @brief This function sets the Aqp matrix for the QP problem.
+     * In order to represent the MPC as a QP we need to satisfy the solver's default formulation
+     * A_qp is detailed in the repport.
+     * 
+     * The first block (at position 0,0) is the A_discrete matrix
+     * The subsequent blocks are the evolution of the previous blocks
+     * A_qp(k+2) = A_discrete(k+1) * A_discrete(k)
+     * 
+     * @param[in] = A_matrix_discrete - The discrete State space matrix A
+     * @param[in] = HORIZON_LENGTH - The length of the horizon
+     * 
+     * @param[out] = A_qp Matrix for the formulation of the problem as a QP.
+     * 
+     * @returns = None
+    */
+    void setAqpMatrix()
     {
         for (int i = 0; i < HORIZON_LENGTH; i++)
         {
             if (i == 0)
-            {   // First block is the A_discrete matrix
+            {  
                 Aqp_matrix.block<NUM_STATE, NUM_STATE>(i * NUM_STATE, 0) = A_matrix_discrete;
             }
             else   
-            {  // The current block is the evolution of the previous block A(k+2) = A(k+1) * A(k)
+            {
                 Aqp_matrix.block<NUM_STATE, NUM_STATE>(i * NUM_STATE, 0) = Aqp_matrix.block<NUM_STATE, NUM_STATE>((i - 1) * NUM_STATE, 0) * A_matrix_discrete;
             }
         }
         // std::cout << "Aqp_matrix: \n" << Aqp_matrix << std::endl;
-        return Aqp_matrix;
     }
 
-    // Jumps from 2 milliseconds to 30. NEEDS optimization!
-    void setBqpMatrix(Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_discrete, Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_STATE> Aqp_matrix)
+    /**
+     * TODO: OPTIMIZE THIS IMPLEMENTATION - Jumps from 2 to 30ms
+     * @brief This function sets the Bqp matrix for the QP problem.
+     * In order to represent the MPC as a QP we need to satisfy the solver's default formulation
+     * B_qp is detailed in the repport.
+     * 
+     * The diagonal blocks are the B_discrete matrix
+     * The off-diagonal blocks are the multiplication of the Aqp matrix and the B_discrete matrix
+     * 
+     * @param[in] = B_matrix_discrete - The discrete B matrix of the state space representation
+     * @param[in] = Aqp_matrix - The matrix that represents the evolution of the state space matrix
+     * 
+     * @param[out] = Bqp_matrix - The B matrix for the formulation of the problem as a QP.
+     * 
+     * @returns = None
+    */
+    void setBqpMatrix()//Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_discrete, Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_STATE> Aqp_matrix)
     {
         for (int i = 0; i< HORIZON_LENGTH; i++)
         {
             for (int j=0; j<= i; j++){
                 if (i - j== 0)
-                {   // The diagonal blocks are the B_discrete matrix
+                {
                     Bqp_matrix.block<NUM_STATE, NUM_DOF>(i * NUM_STATE, 0) = B_matrix_discrete;
                 }
                 else
@@ -184,21 +310,28 @@ public:
     // OSQP QP formulation
     // minimize 0.5 * x^T * P * x + q^T * x
     // subject to l <= A * x <= u
-    // So every constain equality and inequality need to be converted to this form
+    // So every constraint equality and inequality need to be converted to this form
     
     /**
-    This Function builds the A matrix in OSQP Notation
-    Our MPC problem has 3 Inequality constraints and 1 equality constraint, they are:
-    -mu*fz <= fx <= mu*fz, which becomes (-inf <= fx-mu*fz <= 0) && (0 <= fx + mu*fz <= inf). The constraint is divided into two bounds to fit OSQP default formulation
-    -mu*fz <= fy <= mu*fz, which becomes (-inf <= fy-mu*fz <= 0) && (0 <= fy + mu*fz <= inf)
-    Di*ui = 0; Here the switch is taken care of in the bounds, so our constraint becomes fzmin*switch <= fz <= fzmax*switch (and this also includes the 3rd inequality constraint)
-    fmin <= fz <= fmax
-
-    *@param[in] = g_block; - Matrix that will be repeatedly added to Ac to account for the constraints we defined in each leg
-    *@param[in] = Ac_Matrix; - Sparse matrix populated with g_block in its diagonal
-    *@param[out] = Updated Ac_matrix
-    *@returns = none
-    */
+     * @brief This Function builds the A matrix in OSQP Notation
+     * Our MPC problem has 3 Inequality constraints and 1 equality constraint, they are:
+     * 
+     * 1)-mu*fz <= fx <= mu*fz, which becomes (-inf <= fx-mu*fz <= 0) && (0 <= fx + mu*fz <= inf).
+     * 2)-mu*fz <= fy <= mu*fz, which becomes (-inf <= fy-mu*fz <= 0) && (0 <= fy + mu*fz <= inf)
+     * Here, 1) and 2) are divided into two bounds to fit OSQP default formulation.
+     * 
+     * Here the switch is taken care of in the bounds, so our constraint becomes fzmin*switch <= fz <= fzmax*switch
+     * (Therefore we encapsulate the equality constraint in an inequality constraint that is being handled by the bounds)
+     * Di*ui = 0; 
+     * 3)fmin <= fz <= fmax
+     * 
+     * @param[in] = g_block; - Matrix that will be repeatedly added to Ac to account for the constraints we defined in each leg
+     * @param[in] = Ac_Matrix; - Sparse matrix populated with g_block in its diagonal
+     * 
+     * @param[out] = Updated Ac_matrix
+     * 
+     * @returns = none
+     * */
     void setAcMatrix(){
         //Not sure this is the best way to do this, will leave it like that and think of a way to better generalize it:
         g_block << 1,0,mu,  // fx + mu*fz
@@ -216,8 +349,14 @@ public:
     }
 
     /**
-    This Function builds the bounds for the OSQP problem
-    **/
+     * @brief This Function builds the bounds for the OSQP problem
+     * Fitting the OSQP default formulation given by lb <= A_c <= ub
+     * 
+     * @param[in] = fz_min, fz_max - Actuator limits (indirectly as maximum normal force the robot is capable to generate)
+     * @param[in] = mu - Friction coefficient
+     * 
+     * @param[out] = lower_bounds, upper_bounds - The vectors containing the bounds for the OSQP problem
+    */
     void setBounds()
     {
         // Declaring the lower and upper bounds
@@ -290,12 +429,16 @@ public:
         //std::cout << "Shape: " << gradient.rows() << " x " << gradient.cols() << std::endl; 
     }
 
-    /** This function sets the initial guess for the solver.
-    If the solver is running for the first time, the initial guess is a vector of zeros.
-    If it is the second or higher iterations, the initial guess is a hot-start with the previous iteration's minimizer
-    @param[in] = None
-    @param[out] = The initial guess for the solver
-    @returns = None
+    /** 
+     * @brief This function sets the initial guess for the solver.
+     * If the solver is running for the first time, the initial guess is a vector of zeros.
+     * If it is the second or higher iterations, the initial guess is a hot-start with the previous iteration's minimizer
+     * 
+     * @param[in] = None
+     * 
+     * @param[out] = The initial guess for the solver
+     * 
+     * @returns = None
     */    
     void setInitialGuess(){
         Eigen::VectorXd initial_guess = Eigen::VectorXd::Zero(NUM_STATE-1);
@@ -356,11 +499,11 @@ int main(){
 
     auto Rotation_z = mpc.setRotationMatrix(Eigen::Vector3d(0.5, 0.7, 0.6));
     mpc.setAMatrixContinuous(Rotation_z);
-    mpc.setAMatrixDiscrete(mpc.A_matrix_continuous);
+    mpc.setAMatrixDiscrete();
     mpc.setBMatrixContinuous();
-    mpc.setBMatrixDiscrete(mpc.B_matrix_continuous);
-    mpc.setAqpMatrix(mpc.A_matrix_discrete);
-    mpc.setBqpMatrix(mpc.B_matrix_discrete, mpc.Aqp_matrix);
+    mpc.setBMatrixDiscrete();
+    mpc.setAqpMatrix();
+    mpc.setBqpMatrix();
     mpc.setAcMatrix();
     mpc.setBounds();
     mpc.setHessian();
