@@ -255,7 +255,7 @@ public:
 
     /**
      * @brief This function calculates the gradient of the cost function
-     * The mathematical proof for the derivation of this expression can be seen in the repport
+     * The mathematical proof for the derivation of this expression can be seen in the repport (and in miro)
      * 
      * @param[in] = Bqp_matrix , Q_matrix, R_matrix, U_vector, states, states_reference
      * @param[out] = gradient of the cost function
@@ -270,13 +270,23 @@ public:
         //std::cout << "Shape: " << gradient.rows() << " x " << gradient.cols() << std::endl; 
     }
 
-    // void setHessian()
-    // {   
-    //     // Hessian caclulated form the quadratic cost function
-    //     // Proof on Miro
-    //     hessian = Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix;
-    //     std::cout << "Hessian: \n" << hessian << std::endl;
-    // }
+    /**
+     * @brief This function calculates the Hessian of the cost function
+     * The mathematical proof for the derivation of this expression can be seen in the repport (and in miro)
+     * 
+     * @param[in] = Bqp_matrix , Q_matrix, R_matrix
+     * @param[out] = hessian of the cost function
+     * 
+     * @returns = none
+    */
+    void setHessian()
+    {   
+        hessian = Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix;
+    
+        // std::cout << "Hessian: \n" << hessian << std::endl;
+        // std::cout << "Shape: " << hessian.rows() << " x " << hessian.cols() << std::endl;
+
+    }
 
     /** This function sets the initial guess for the solver.
     If the solver is running for the first time, the initial guess is a vector of zeros.
@@ -355,7 +365,7 @@ int main(){
     mpc.setAcMatrix();
     mpc.setBounds();
     mpc.setGradient();
-    // mpc.setHessian();
+    mpc.setHessian();
     // mpc.setInitialGuess();
 
     auto end = std::chrono::high_resolution_clock::now();
