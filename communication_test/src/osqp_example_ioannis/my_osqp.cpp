@@ -40,7 +40,7 @@ public:
         fz_max = 666;
         states = Eigen::VectorXd::Random(NUM_STATE); // Dummy values until we get the real states
         states_reference = Eigen::VectorXd::Random(NUM_STATE); // Dummy values until we get the real states
-        U = Eigen::VectorXd::Random(NUM_DOF*HORIZON_LENGTH);
+        U_vector = Eigen::VectorXd::Random(NUM_DOF*HORIZON_LENGTH); // Dummy values until we get the real states
     }
    
     /**
@@ -253,18 +253,22 @@ public:
         // std::cout<<"Upper bounds: \n"<<upper_bounds_horizon<<std::endl;
     }
 
-    // void setGradient()
-    // {
-    //     // Gradient calculated from the quadratic cost function
-    //     // Proof on Miro
-    //     gradient = (Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix)*states + 2*Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix * states - states_reference);
-    //     //B_qp^T = 120x130          //B_qp^T = 120x130
-    //     // Q = 130*130              //Q = 130x130
-    //     //B_qp = 130x120            //A_qp = 130x13
-    //     //R = 120x120               //States = 120x1
-    //                                 //States_ref = 120x1
-    //     std::cout << "Gradient: \n" << gradient << std::endl;
-    // }
+    /**
+     * @brief This function calculates the gradient of the cost function
+     * The mathematical proof for the derivation of this expression can be seen in the repport
+     * 
+     * @param[in] = Bqp_matrix , Q_matrix, R_matrix, U_vector, states, states_reference
+     * @param[out] = gradient of the cost function
+     * 
+     * @returns = none
+    */
+    void setGradient()
+    {
+        gradient = (Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix)*U_vector + 2*Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix * (states - states_reference));
+  
+        //std::cout << "Gradient: \n" << gradient << std::endl;
+        //std::cout << "Shape: " << gradient.rows() << " x " << gradient.cols() << std::endl; 
+    }
 
     // void setHessian()
     // {   
@@ -304,7 +308,7 @@ public:
     double fz_max;
     Eigen::VectorXd states; // Dummy values until we get the real states
     Eigen::VectorXd states_reference; // Dummy values until we get the real states
-    Eigen::VectorXd U;
+    Eigen::VectorXd U_vector;
     
     //Matrices declaration
     Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_continuous;
@@ -350,7 +354,7 @@ int main(){
     mpc.setBqpMatrix(mpc.B_matrix_discrete, mpc.Aqp_matrix);
     mpc.setAcMatrix();
     mpc.setBounds();
-    // mpc.setGradient();
+    mpc.setGradient();
     // mpc.setHessian();
     // mpc.setInitialGuess();
 
