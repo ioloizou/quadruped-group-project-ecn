@@ -6,49 +6,40 @@
 #include <iostream>
 #include <chrono>
 
-/**
- * Constants - Declared here because inside the class does not work
- * 
- * g = acceleration of gravity (9.81 [m/s^2])
- * 
- * LEGS = Number of legs of the robot (4)
- * 
- * NUM_STATE = dimension of state vector (X, Y, Z, Vx, Vy, Vz, θx, θy, θz wx, wy, wz, g)
- *                                       (position, lin. vel., orientation, ang. velocity, gravity)
- *                                       due to the extension to hold the gravity term it comes to dimension 13
- * 
- * NUM_DOF = Each foot has 1 GRF (which is a 3x1 vector), therefore NUM_DOF = 3*LEGS = 12
+//Constants - Declared here because inside the class does not work
+
+//g = acceleration of gravity [m/s^2]
+const double g = 9.81;
+
+/**NUM_STATE = dimension of state vector (X, Y, Z, Vx, Vy, Vz, θx, θy, θz wx, wy, wz, g)
+ * (position, lin. vel., orientation, ang. velocity, gravity)
+ * due to the extension to hold the gravity term it comes to dimension 13
  * 
  * foot_positions = 3x4 matrix to hold the xyz coords of each foot. (in the body frame?)
  * 
- * HORIZON_LENGTH = number of steps in the horizon (10)
- * 
- * dt = time step (0.01 [seconds])
- * 
- * NUM_BOUNDS = Number of bounds for the constraints. In our case 5 since we had to divide each inequality
- *                                                    into 2 bounds (4) + the contact constraint.
- *                                                   (Decide if there is a way to generalize this or user inputs a constant)
- * 
- * A1_INERTIA_WORLD = Inertia Matrix of the robot in the world frame [kg*m/s^2].
- * 
+ * NUM_DOF = Each foot has 1 GRF (which is a 3x1 vector), therefore NUM_DOF = 3*LEGS = 12
+*/
+const int LEGS = 4;
+const int NUM_STATE = 13;
+const int NUM_DOF = 3 * LEGS;
+const Eigen::Matrix<double, 3, LEGS> foot_positions = Eigen::Matrix<double, 3, LEGS>::Random(); //Random values until we get the real values
+
+/**HORIZON_LENGTH = number of steps in the horizon
  * ROBOT_MASS = Mass of the robot (10 [kg])
 */
+const int HORIZON_LENGTH = 10;
+const double dt = 0.01;
 
-//Constants - I declared here because inside the class does not work
-const double g = 9.81; // m/s^2
+/**NUM_BOUNDS = Number of bounds for the constraints. In our case 5 since we had to divide each inequality
+ *                                                    into 2 bounds (4) + the contact constraint.
+ *                                                   (Decide if there is a way to generalize this or user inputs a constant)
+*/
+const int NUM_BOUNDS = 5;
 
-const int LEGS = 4;
-const int NUM_STATE = 13; // 3 for position, 3 for velocity, 3 for orientation, 3 for angular velocity + 1 to add the gravity term
-const int NUM_DOF = 3 * LEGS; // 1 GRF for each foot which is 3x1 vector so 3*LEGS = 12
-const Eigen::Matrix<double, 3, LEGS> foot_positions = Eigen::Matrix<double, 3, LEGS>::Random(); // 3x4 matrix with random values until we get the real values
-
-const int HORIZON_LENGTH = 10; // 10 steps
-const double dt = 0.01; // 0.01 seconds
-
-const int NUM_BOUNDS = 5; //4 bounds, since we divided each inequality constraint into 2 bounds + the contact equality constraint (maybe this needs to be generalized and not a fixed number later on)
-
-const Eigen::Matrix3d A1_INERTIA_WORLD = Eigen::Matrix3d::Identity(); // Inertia matrix of the robot in the world frame
-const double ROBOT_MASS = 10; // 10 kg
+//A1_INERTIA_WORLD = Inertia Matrix of the robot in the world frame [kg*m/s^2].
+//ROBOT_MASS = Mass of the robot (10 [kg])
+const Eigen::Matrix3d A1_INERTIA_WORLD = Eigen::Matrix3d::Identity(); // Identity until we change for the real values
+const double ROBOT_MASS = 10;
 
 /**
  * @brief This function converts a 3D vector into a skew-symmetric matrix
@@ -94,8 +85,6 @@ public:
         B_matrix_discrete = Eigen::Matrix<double, NUM_STATE, NUM_DOF>::Zero();
         Aqp_matrix = Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_STATE>::Zero();
         Bqp_matrix = Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH>::Zero();
-        Ac_matrix = Eigen::Matrix<double, NUM_BOUNDS * LEGS, NUM_DOF>::Zero();
-
     }
     
     /**
@@ -126,8 +115,8 @@ public:
      * 
      * @returns = None
     */
-    void setQMatrix(Eigen::VectorXd &q_weights)
-    {
+    void setQMatrix(Eigen::VectorXd &q_weights){
+
         // It doesnt let us declare size at the start so we need to initialize it here
         Q_matrix = Eigen::SparseMatrix<double>(NUM_STATE * HORIZON_LENGTH, NUM_STATE * HORIZON_LENGTH);
         for (int i = 0; i < NUM_STATE * HORIZON_LENGTH; i++)
@@ -148,8 +137,7 @@ public:
      * 
      * @returns = None
     */    
-    void setRMatrix(Eigen::VectorXd &r_weights)
-    {
+    void setRMatrix(Eigen::VectorXd &r_weights){
         R_matrix = Eigen::SparseMatrix<double>(NUM_DOF * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH);
         for (int i = 0; i < NUM_DOF * HORIZON_LENGTH; i++)
         {
@@ -167,8 +155,7 @@ public:
      * 
      * @returns = None
     */
-    void setAMatrixContinuous(Eigen::Matrix3d Rotation_z)
-    {
+    void setAMatrixContinuous(Eigen::Matrix3d Rotation_z){
         // Using the paper A matrix as reference
         A_matrix_continuous.block<3, 3>(0, 6) = Rotation_z;
         A_matrix_continuous.block<3, 3>(3, 9) = Eigen::Matrix3d::Identity();
@@ -189,8 +176,7 @@ public:
      * 
      * @returns = None
     */
-    void setAMatrixDiscrete()
-    {
+    void setAMatrixDiscrete(){
         A_matrix_discrete = Eigen::Matrix<double, NUM_STATE, NUM_STATE>::Identity(NUM_STATE, NUM_STATE) + A_matrix_continuous * dt;
         // std::cout << "A_matrix_discrete: \n" << A_matrix_discrete << std::endl;
         
@@ -209,8 +195,7 @@ public:
      * 
      * @returns = None
     */
-    void setBMatrixContinuous()
-    {
+    void setBMatrixContinuous(){
         for (int i=0; i<LEGS; i++)
         {
             // Using the paper B matrix as reference
@@ -235,8 +220,7 @@ public:
      * 
      * @returns = None
     */
-    void setBMatrixDiscrete()
-    {
+    void setBMatrixDiscrete(){
         B_matrix_discrete = B_matrix_continuous * dt;
         // std::cout << "B_matrix_discrete: \n" << B_matrix_discrete << std::endl;
     }
@@ -257,8 +241,7 @@ public:
      * 
      * @returns = None
     */
-    void setAqpMatrix()
-    {
+    void setAqpMatrix(){
         for (int i = 0; i < HORIZON_LENGTH; i++)
         {
             if (i == 0)
@@ -289,8 +272,7 @@ public:
      * 
      * @returns = None
     */
-    void setBqpMatrix()//Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_discrete, Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_STATE> Aqp_matrix)
-    {
+    void setBqpMatrix(){
         for (int i = 0; i< HORIZON_LENGTH; i++)
         {
             for (int j=0; j<= i; j++){
@@ -307,13 +289,15 @@ public:
         // std::cout << "Bqp_matrix: \n" << Bqp_matrix << std::endl;
     }
 
-    // OSQP QP formulation
-    // minimize 0.5 * x^T * P * x + q^T * x
-    // subject to l <= A * x <= u
-    // So every constraint equality and inequality need to be converted to this form
+    /** 
+     * OSQP QP formulation
+     * minimize 0.5 * x^T * P * x + q^T * x
+     * subject to l <= A * x <= u
+     * So every constraint equality and inequality need to be converted to this form
+    */
     
     /**
-     * @brief This Function builds the A matrix in OSQP Notation
+     * @brief This Function builds the A matrix in OSQP Notation (Here Ac for constraints)
      * Our MPC problem has 3 Inequality constraints and 1 equality constraint, they are:
      * 
      * 1)-mu*fz <= fx <= mu*fz, which becomes (-inf <= fx-mu*fz <= 0) && (0 <= fx + mu*fz <= inf).
@@ -325,14 +309,23 @@ public:
      * Di*ui = 0; 
      * 3)fmin <= fz <= fmax
      * 
+     * The function uses a dense matrix populated with the .block method for cleaniness and readability, but then gets converted
+     * to a sparse matrix, sice OSQP requires the Ac matrix to be of type Eigen::SparseMatrix<double>.
+     * 
+     * First we do one horizon and then populate the Ac matrix for the whole horizon with the same method
+     * 
      * @param[in] = g_block; - Matrix that will be repeatedly added to Ac to account for the constraints we defined in each leg
      * @param[in] = Ac_Matrix; - Sparse matrix populated with g_block in its diagonal
      * 
      * @param[out] = Updated Ac_matrix
      * 
      * @returns = none
-     * */
+     */
     void setAcMatrix(){
+        
+        Eigen::Matrix<double,NUM_BOUNDS * LEGS, NUM_DOF> Ac_matrix;
+        Eigen::Matrix<double,NUM_BOUNDS * LEGS * HORIZON_LENGTH, NUM_DOF*HORIZON_LENGTH> Ac_matrix_horizon_dense;
+        
         //Not sure this is the best way to do this, will leave it like that and think of a way to better generalize it:
         g_block << 1,0,mu,  // fx + mu*fz
                    1,0,-mu, // fx - mu*fz
@@ -340,12 +333,20 @@ public:
                    0,1,-mu, // fy - mu*fz
                    0,0,1;   // min max fz/contact constraint (just take into bounds of fz if foot is on ground)
 
+        //Build Ac for one horizon
         for (int i = 0; i < LEGS; i++){ 
             Ac_matrix.block<NUM_BOUNDS, NUM_DOF/LEGS>(i*NUM_BOUNDS, i*(NUM_DOF/LEGS)) = g_block;
         }
-        Ac_matrix = Ac_matrix.sparseView();
-
+        
+        //Extend to the horizon length (stack them vertically)
+        for(int i = 0; i < HORIZON_LENGTH; i++){
+            Ac_matrix_horizon_dense.block<NUM_BOUNDS * LEGS, NUM_DOF>(i * NUM_BOUNDS * LEGS, 0) = Ac_matrix;
+        }
+        
+        Ac_matrix_horizon = Ac_matrix_horizon_dense.sparseView();
+        
         // std::cout << "Ac_matrix: \n" << Ac_matrix << std::endl;
+         std::cout << "Ac_matrix_horizon Shape: " << Ac_matrix_horizon.rows() << " x " << Ac_matrix_horizon.cols() << std::endl;
     }
 
     /**
@@ -357,8 +358,8 @@ public:
      * 
      * @param[out] = lower_bounds, upper_bounds - The vectors containing the bounds for the OSQP problem
     */
-    void setBounds()
-    {
+    void setBounds(){
+        
         // Declaring the lower and upper bounds
         Eigen::VectorXd lower_bounds(NUM_BOUNDS * LEGS);
         Eigen::VectorXd upper_bounds(NUM_BOUNDS * LEGS);
@@ -380,8 +381,8 @@ public:
         }
 
         // Creating horizon bounds
-        Eigen::VectorXd lower_bounds_horizon = Eigen::VectorXd::Zero(NUM_BOUNDS * LEGS * HORIZON_LENGTH);
-        Eigen::VectorXd upper_bounds_horizon = Eigen::VectorXd::Zero(NUM_BOUNDS * LEGS * HORIZON_LENGTH);
+        lower_bounds_horizon = Eigen::VectorXd::Zero(NUM_BOUNDS * LEGS * HORIZON_LENGTH);
+        upper_bounds_horizon = Eigen::VectorXd::Zero(NUM_BOUNDS * LEGS * HORIZON_LENGTH);
         
         for (int i=0; i<HORIZON_LENGTH; i++)
         {
@@ -390,6 +391,10 @@ public:
         }
         // std::cout<<"Lower bounds: \n"<<lower_bounds_horizon<<std::endl;
         // std::cout<<"Upper bounds: \n"<<upper_bounds_horizon<<std::endl;
+
+        std::cout << "lower_bounds_horizon Shape: " << lower_bounds_horizon.rows() << " x " << lower_bounds_horizon.cols() << std::endl;
+        std::cout << "upper_bounds_horizon Shape: " << upper_bounds_horizon.rows() << " x " << upper_bounds_horizon.cols() << std::endl;
+
     }
 
     /**
@@ -401,8 +406,7 @@ public:
      * 
      * @returns = none
     */
-    void setHessian()
-    {   
+    void setHessian(){   
         hessian = Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix;
     
         // std::cout << "Hessian: \n" << hessian << std::endl;
@@ -420,8 +424,7 @@ public:
      * 
      * @returns = none
     */
-    void setGradient()
-    {
+    void setGradient(){
         auto temp = hessian * U_vector;
         gradient = temp + 2*Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix * (states - states_reference));
   
@@ -451,8 +454,35 @@ public:
         //std::cout << "Initial Guess: \n" << initial_guess << std::endl;
     }
 
-    void solveQP()
-    {}
+    void solveQP(){
+        //Instantiate the solver
+        OsqpEigen::Solver solver;
+
+        //Configure the solver
+        solver.settings()->setVerbosity(false);
+        solver.settings()->setWarmStart(false);
+        solver.data()->setNumberOfVariables(NUM_DOF*HORIZON_LENGTH);
+        solver.data()->setNumberOfConstraints(NUM_BOUNDS*LEGS);
+        solver.data()->setLinearConstraintsMatrix(Ac_matrix_horizon);
+        solver.data()->setHessianMatrix(hessian);
+        solver.data()->setGradient(gradient);
+        solver.data()->setLowerBound(lower_bounds_horizon);
+        solver.data()->setUpperBound(upper_bounds_horizon);
+
+        //Init and solve keeping track of time at each step
+        auto t0 = std::chrono::high_resolution_clock::now();
+        solver.initSolver();
+        auto t1 = std::chrono::high_resolution_clock::now();
+        solver.solveProblem();
+        auto t2 = std::chrono::high_resolution_clock::now();
+
+        //Process and print time intervals
+        std::chrono::duration<double, std::milli> init_duration = t1 - t0;
+        std::chrono::duration<double, std::milli> solve_duration = t2 - t1;
+        std::cout << "Solver init time: " << init_duration.count() << "ms" << std::endl; 
+        std::cout << "Solve time: " << solve_duration.count() << "ms" << std::endl;
+
+    }
 
     void printResults()
     {}
@@ -476,10 +506,13 @@ public:
     Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH> Bqp_matrix;
 
     Eigen::Matrix<double,NUM_BOUNDS , NUM_DOF/LEGS> g_block;
-    Eigen::Matrix<double,NUM_BOUNDS * LEGS, NUM_DOF> Ac_matrix;
+    Eigen::SparseMatrix<double> Ac_matrix_horizon;
+    
+    Eigen::VectorXd lower_bounds_horizon;
+    Eigen::VectorXd upper_bounds_horizon;
     
     Eigen::Matrix<double, NUM_DOF * HORIZON_LENGTH, 1> gradient;
-    Eigen::Matrix<double, NUM_DOF * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH> hessian;
+    Eigen::SparseMatrix<double> hessian;
 
     bool is_first_run = true;  //to be set to false after first iteration, so that the initial guess is correctly set to hot-start the solver
 };
@@ -510,10 +543,12 @@ int main(){
     mpc.setGradient();
     mpc.setInitialGuess();
 
+    mpc.solveQP();
+
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration = end - start;
 
-    std::cout << "Time taken: " << duration.count() << " milliseconds" << std::endl;
+    std::cout << "Total Time taken: " << duration.count() << " milliseconds" << std::endl;
 
     return 0;
 }
