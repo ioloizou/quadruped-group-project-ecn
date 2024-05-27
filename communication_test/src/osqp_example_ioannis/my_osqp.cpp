@@ -210,7 +210,7 @@ public:
         for (int i = 0; i < LEGS; i++){ 
             Ac_matrix.block<NUM_BOUNDS, NUM_DOF/LEGS>(i*NUM_BOUNDS, i*(NUM_DOF/LEGS)) = g_block;
         }
-        // Ac_matrix = Ac_matrix.sparseView();
+        Ac_matrix = Ac_matrix.sparseView();
 
         // std::cout << "Ac_matrix: \n" << Ac_matrix << std::endl;
     }
@@ -254,23 +254,6 @@ public:
     }
 
     /**
-     * @brief This function calculates the gradient of the cost function
-     * The mathematical proof for the derivation of this expression can be seen in the repport (and in miro)
-     * 
-     * @param[in] = Bqp_matrix , Q_matrix, R_matrix, U_vector, states, states_reference
-     * @param[out] = gradient of the cost function
-     * 
-     * @returns = none
-    */
-    void setGradient()
-    {
-        gradient = (Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix)*U_vector + 2*Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix * (states - states_reference));
-  
-        //std::cout << "Gradient: \n" << gradient << std::endl;
-        //std::cout << "Shape: " << gradient.rows() << " x " << gradient.cols() << std::endl; 
-    }
-
-    /**
      * @brief This function calculates the Hessian of the cost function
      * The mathematical proof for the derivation of this expression can be seen in the repport (and in miro)
      * 
@@ -288,6 +271,25 @@ public:
 
     }
 
+    /**
+     * @brief This function calculates the gradient of the cost function
+     * The mathematical proof for the derivation of this expression can be seen in the repport (and in miro)
+     * It is vital to precompute the hessian (saves around 24ms in the overall implementation)
+     * 
+     * @param[in] = Bqp_matrix , Q_matrix, hessian, U_vector, states, states_reference
+     * @param[out] = gradient of the cost function
+     * 
+     * @returns = none
+    */
+    void setGradient()
+    {
+        auto temp = hessian * U_vector;
+        gradient = temp + 2*Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix * (states - states_reference));
+  
+        //std::cout << "Gradient: \n" << gradient << std::endl;
+        //std::cout << "Shape: " << gradient.rows() << " x " << gradient.cols() << std::endl; 
+    }
+
     /** This function sets the initial guess for the solver.
     If the solver is running for the first time, the initial guess is a vector of zeros.
     If it is the second or higher iterations, the initial guess is a hot-start with the previous iteration's minimizer
@@ -295,16 +297,16 @@ public:
     @param[out] = The initial guess for the solver
     @returns = None
     */    
-    // void setInitialGuess(){
-    //     Eigen::VectorXd initial_guess = Eigen::VectorXd::Zero(NUM_STATE-1);
-    //     if (is_first_run == false){
-    //         //Retrieve the last minimizer correctly, for now it is a random vector
-    //         //Goal is to have: initial_guess = last_minimizer
-    //         initial_guess.setRandom();
-    //     }
+    void setInitialGuess(){
+        Eigen::VectorXd initial_guess = Eigen::VectorXd::Zero(NUM_STATE-1);
+        if (is_first_run == false){
+            //Retrieve the last minimizer correctly, for now it is a random vector
+            //Goal is to have: initial_guess = last_minimizer
+            initial_guess.setRandom();
+        }
 
-    //     std::cout << "Initial Guess: \n" << initial_guess << std::endl;
-    // }
+        //std::cout << "Initial Guess: \n" << initial_guess << std::endl;
+    }
 
     void solveQP()
     {}
@@ -329,15 +331,12 @@ public:
     Eigen::SparseMatrix<double> R_matrix;
     Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_STATE> Aqp_matrix;
     Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH> Bqp_matrix;
-    
 
     Eigen::Matrix<double,NUM_BOUNDS , NUM_DOF/LEGS> g_block;
     Eigen::Matrix<double,NUM_BOUNDS * LEGS, NUM_DOF> Ac_matrix;
-
+    
     Eigen::Matrix<double, NUM_DOF * HORIZON_LENGTH, 1> gradient;
     Eigen::Matrix<double, NUM_DOF * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH> hessian;
-
-    
 
     bool is_first_run = true;  //to be set to false after first iteration, so that the initial guess is correctly set to hot-start the solver
 };
@@ -364,9 +363,9 @@ int main(){
     mpc.setBqpMatrix(mpc.B_matrix_discrete, mpc.Aqp_matrix);
     mpc.setAcMatrix();
     mpc.setBounds();
-    mpc.setGradient();
     mpc.setHessian();
-    // mpc.setInitialGuess();
+    mpc.setGradient();
+    mpc.setInitialGuess();
 
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> duration = end - start;
