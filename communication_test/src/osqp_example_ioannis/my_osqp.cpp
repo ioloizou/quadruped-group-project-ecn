@@ -325,8 +325,8 @@ public:
                    0,0,1;   // min max fz/contact constraint (just take into bounds of fz if foot is on ground)
 
         Ac_matrix = Eigen::SparseMatrix<double>(NUM_BOUNDS * LEGS * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH);
-        
         std::vector<Eigen::Triplet<double>> tripletList;
+        
         // reserve space for the triplets (40 blocks with 9 non zero entries each)
         tripletList.reserve(9 * 40);  
 
@@ -342,6 +342,7 @@ public:
                     tripletList.push_back(Eigen::Triplet<double>(row_offset + i, col_offset + j, g_block(i, j)));
                 }
             }
+            
             //Move to next insertion points, to begin inserting the next block
             row_offset += 5; 
             col_offset += 3; 
@@ -481,12 +482,16 @@ public:
         solver.solveProblem();
         auto t2 = std::chrono::high_resolution_clock::now();
 
-        //Process and print time intervals
+        //Process and print time intervals of the solver
         std::chrono::duration<double, std::milli> init_duration = t1 - t0;
         std::chrono::duration<double, std::milli> solve_duration = t2 - t1;
         std::cout << "Solver init time: " << init_duration.count() << "ms" << std::endl; 
         std::cout << "Solve time: " << solve_duration.count() << "ms" << std::endl;
 
+        //print results
+        Eigen::VectorXd result = solver.getSolution();
+        //std::cout << "Result: \n" << result << std::endl;
+        //std::cout << "Result Shape: " << result.rows() << " x " << result.cols() << std::endl;
     }
 
     void printResults()
