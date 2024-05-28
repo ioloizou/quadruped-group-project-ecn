@@ -7,29 +7,30 @@ find_package(catkin REQUIRED COMPONENTS
     quad_msgs
 )
 find_package(Eigen3 REQUIRED)
+find_package(OsqpEigen REQUIRED)
 
 catkin_package(
-    DEPENDS EIGEN3
+    #INCLUDE_DIRS include
+    LIBRARIES ${PROJECT_NAME}
     CATKIN_DEPENDS roscpp std_msgs quad_msgs
-    LIBRARIES lmpc_controller
+    #LIBRARIES lmpc_controller
 )
-
-include_directories(
-    ${EIGEN3_INCLUDE_DIR}
-)
-include_directories(/usr/local/include/osqp)
-find_package(OsqpEigen REQUIRED)
 
 include_directories(
     ${catkin_INCLUDE_DIRS}
-    ${EIGEN3_INCLUDE_DIRS}
+    ${EIGEN3_INCLUDE_DIR}
+    /usr/local/include/osqp
+    ${OsqpEigen_INCLUDE_DIRS}
 )
 
-add_executable(lmpc_controller src/lmpc_controller.cpp)
-target_link_libraries(lmpc_controller 
+add_executable(linear_mpc src/lmpc_controller.cpp)
+target_link_libraries(linear_mpc 
     ${catkin_LIBRARIES}
     Eigen3::Eigen
     OsqpEigen::OsqpEigen
+)
+install(TARGETS linear_mpc
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
 ## Declare a C++ library
