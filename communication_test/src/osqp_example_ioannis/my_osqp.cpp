@@ -309,11 +309,6 @@ public:
      * Di*ui = 0; 
      * 3)fmin <= fz <= fmax
      * 
-     * The function uses a dense matrix populated with the .block method for cleaniness and readability, but then gets converted
-     * to a sparse matrix, sice OSQP requires the Ac matrix to be of type Eigen::SparseMatrix<double>.
-     * 
-     * First we do one horizon and then populate the Ac matrix for the whole horizon with the same method
-     * 
      * @param[in] = g_block; - Matrix that will be repeatedly added to Ac to account for the constraints we defined in each leg
      * @param[in] = Ac_Matrix; - Sparse matrix populated with g_block in its diagonal
      * 
@@ -323,30 +318,40 @@ public:
      */
     void setAcMatrix(){
         
-        Eigen::Matrix<double,NUM_BOUNDS * LEGS, NUM_DOF> Ac_matrix;
-        Eigen::Matrix<double,NUM_BOUNDS * LEGS * HORIZON_LENGTH, NUM_DOF*HORIZON_LENGTH> Ac_matrix_horizon_dense;
-        
-        //Not sure this is the best way to do this, will leave it like that and think of a way to better generalize it:
         g_block << 1,0,mu,  // fx + mu*fz
                    1,0,-mu, // fx - mu*fz
                    0,1,mu,  // fy + mu*fz
                    0,1,-mu, // fy - mu*fz
                    0,0,1;   // min max fz/contact constraint (just take into bounds of fz if foot is on ground)
 
-        //Build Ac for one horizon
-        for (int i = 0; i < LEGS; i++){ 
-            Ac_matrix.block<NUM_BOUNDS, NUM_DOF/LEGS>(i*NUM_BOUNDS, i*(NUM_DOF/LEGS)) = g_block;
+        Ac_matrix = Eigen::SparseMatrix<double>(NUM_BOUNDS * LEGS * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH);
+        
+        std::vector<Eigen::Triplet<double>> tripletList;
+        // reserve space for the triplets (40 blocks with 9 non zero entries each)
+        tripletList.reserve(9 * 40);  
+
+        int row_offset = 0;
+        int col_offset = 0;
+
+        while (row_offset + g_block.rows() <= Ac_matrix.rows() && col_offset + g_block.cols() <= Ac_matrix.cols())
+        {
+            for (int i = 0; i < g_block.rows(); ++i)
+            {
+                for (int j = 0; j < g_block.cols(); ++j)
+                {
+                    tripletList.push_back(Eigen::Triplet<double>(row_offset + i, col_offset + j, g_block(i, j)));
+                }
+            }
+            //Move to next insertion points, to begin inserting the next block
+            row_offset += 5; 
+            col_offset += 3; 
         }
+
+        Ac_matrix.setFromTriplets(tripletList.begin(), tripletList.end());
+        Ac_matrix.makeCompressed();
         
-        //Extend to the horizon length (stack them vertically)
-        for(int i = 0; i < HORIZON_LENGTH; i++){
-            Ac_matrix_horizon_dense.block<NUM_BOUNDS * LEGS, NUM_DOF>(i * NUM_BOUNDS * LEGS, 0) = Ac_matrix;
-        }
-        
-        Ac_matrix_horizon = Ac_matrix_horizon_dense.sparseView();
-        
-        // std::cout << "Ac_matrix: \n" << Ac_matrix << std::endl;
-         std::cout << "Ac_matrix_horizon Shape: " << Ac_matrix_horizon.rows() << " x " << Ac_matrix_horizon.cols() << std::endl;
+        // //std::cout << "Ac_matrix: \n" << Ac_matrix << std::endl;
+        // std::cout << "Ac_matrix Shape: " << Ac_matrix.rows() << " x " << Ac_matrix.cols() << std::endl;
     }
 
     /**
@@ -367,17 +372,17 @@ public:
         // Setting the bounds for each leg
         for (int i=0; i<LEGS; i++)
         {
-            lower_bounds.segment<5>(i*NUM_BOUNDS) << 0,                 //  0        <= fx + mu*fz
-                                                     -Eigen::Infinity,  // -infinity <= fx - mu*fz
-                                                     0,                 //  0        <= fy + mu*fz
-                                                     -Eigen::Infinity,  // -infinity <= fy - mu*fz
-                                                     fz_min;            //  fz_min   <= fz          fz_min*contact = 0 or 1 depending on the contact
+            lower_bounds.segment<5>(i*NUM_BOUNDS) << 0,                                         //  0        <= fx + mu*fz
+                                                     -std::numeric_limits<double>::infinity(),  // -infinity <= fx - mu*fz
+                                                     0,                                         //  0        <= fy + mu*fz
+                                                     -std::numeric_limits<double>::infinity(),  // -infinity <= fy - mu*fz
+                                                     fz_min;                                    //  fz_min   <= fz          fz_min*contact = 0 or 1 depending on the contact
                                                      
-            upper_bounds.segment<5>(i*NUM_BOUNDS) << Eigen::Infinity,   //  fx + mu*fz <= infinity
-                                                     0,                 //  fx - mu*fz <= 0
-                                                     Eigen::Infinity,   //  fy + mu*fz <= infinity
-                                                     0,                 //  fy - mu*fz <= 0
-                                                     fz_max; //         //          fz <= fz_max    fz_max*contact = 0 or 1 depending on the contact
+            upper_bounds.segment<5>(i*NUM_BOUNDS) << std::numeric_limits<double>::infinity(),   //  fx + mu*fz <= infinity
+                                                     0,                                         //  fx - mu*fz <= 0
+                                                     std::numeric_limits<double>::infinity(),   //  fy + mu*fz <= infinity
+                                                     0,                                         //  fy - mu*fz <= 0
+                                                     fz_max;                                    //  fz <= fz_max            fz_max*contact = 0 or 1 depending on the contact
         }
 
         // Creating horizon bounds
@@ -389,12 +394,12 @@ public:
             lower_bounds_horizon.segment<NUM_BOUNDS * LEGS>(i*NUM_BOUNDS*LEGS) = lower_bounds;
             upper_bounds_horizon.segment<NUM_BOUNDS * LEGS>(i*NUM_BOUNDS*LEGS) = upper_bounds;
         }
+        
         // std::cout<<"Lower bounds: \n"<<lower_bounds_horizon<<std::endl;
         // std::cout<<"Upper bounds: \n"<<upper_bounds_horizon<<std::endl;
 
-        std::cout << "lower_bounds_horizon Shape: " << lower_bounds_horizon.rows() << " x " << lower_bounds_horizon.cols() << std::endl;
-        std::cout << "upper_bounds_horizon Shape: " << upper_bounds_horizon.rows() << " x " << upper_bounds_horizon.cols() << std::endl;
-
+        // std::cout << "lower_bounds_horizon Shape: " << lower_bounds_horizon.rows() << " x " << lower_bounds_horizon.cols() << std::endl;
+        // std::cout << "upper_bounds_horizon Shape: " << upper_bounds_horizon.rows() << " x " << upper_bounds_horizon.cols() << std::endl;
     }
 
     /**
@@ -462,8 +467,8 @@ public:
         solver.settings()->setVerbosity(false);
         solver.settings()->setWarmStart(false);
         solver.data()->setNumberOfVariables(NUM_DOF*HORIZON_LENGTH);
-        solver.data()->setNumberOfConstraints(NUM_BOUNDS*LEGS);
-        solver.data()->setLinearConstraintsMatrix(Ac_matrix_horizon);
+        solver.data()->setNumberOfConstraints(NUM_BOUNDS*LEGS*HORIZON_LENGTH);
+        solver.data()->setLinearConstraintsMatrix(Ac_matrix);
         solver.data()->setHessianMatrix(hessian);
         solver.data()->setGradient(gradient);
         solver.data()->setLowerBound(lower_bounds_horizon);
@@ -506,7 +511,7 @@ public:
     Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH> Bqp_matrix;
 
     Eigen::Matrix<double,NUM_BOUNDS , NUM_DOF/LEGS> g_block;
-    Eigen::SparseMatrix<double> Ac_matrix_horizon;
+    Eigen::SparseMatrix<double> Ac_matrix;
     
     Eigen::VectorXd lower_bounds_horizon;
     Eigen::VectorXd upper_bounds_horizon;
