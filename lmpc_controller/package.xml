@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>lmpc_controller</name>
+  <version>0.0.0</version>
+  <description>The lmpc_controller package</description>
+
+  <author email="joao.lancha@eleves.ec-nantes.fr">joao</author>
+  <maintainer email="joao.lancha@eleves.ec-nantes.fr">joao</maintainer>
+  <author email="ioannis.loizou@eleves.ec-nantes.fr">ioannis</author>
+  <maintainer email="ioannis.loizou@eleves.ec-nantes.fr">ioannis</maintainer>
+
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>cmake</buildtool_depend>
+
+  <build_depend>roscpp</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>quad_msgs</build_depend>
+  <build_depend>Eigen3</build_depend>
+  <build_depend>OsqpEigen</build_depend>
+
+  <exec_depend>roscpp</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>quad_msgs</exec_depend>
+  <exec_depend>Eigen3</exec_depend>
+  <exec_depend>OsqpEigen</exec_depend>
+ 
+  <export>
+    <build_type>cmake</build_type>
+  </export>
+</package>
