@@ -1,5 +1,5 @@
-RBDL - Rigid Body Dynamics Library
-Copyright (c) 2011-2020 Martin Felis <martin@fysx.org>
+RBDL ORB - Rigid Body Dynamics Library (ORB Version)
+Copyright (c) 2018-2021 Felix Richter <felix.richter@informatik.uni-heidelberg.de>
 
 Introduction
 ============
@@ -35,8 +35,15 @@ To create the documentation simply run
 which will generate the documentation in the subdirectory ./doc/html. The main page will then
 be located in ./doc/html/index.html.
 
-Getting RBDL
-============
+VCPKG package manager (for Windows, Linux and Mac)
+==================================================
+As of 08-2021 `rbdl-orb` is part of microsofts vcpkg, a tool to manage c++ dependencies on all major operating systems.
+The luamodel and urdfmodel addon are installed via vcpkg as well, other addons may be added in the future as well.
+
+Install vcpkg by making a local clone from its GitHub repo [https://github.com/Microsoft/vcpkg](https://github.com/Microsoft/vcpkg). Then run the vcpkg-bootstrapper script to set it up. For detailed installation instructions, see [Install vcpkg](https://docs.microsoft.com/en-us/cpp/build/install-vcpkg). To integrate vcpkg with your Visual Studio or Visual Studio Code development environment, see [Integrate vcpkg](https://docs.microsoft.com/en-us/cpp/build/integrate-vcpkg). Then, to use vcpkg to install or update a library, see [Manage libraries with vcpkg](https://docs.microsoft.com/en-us/cpp/build/manage-libraries-with-vcpkg). For more information about vcpkg commands, see [vcpkg command-line reference](https://docs.microsoft.com/en-us/cpp/build/vcpkg-command-line-reference).
+
+Building RBDL from Source
+=========================
 
 The official rbdl-orb git repository can be cloned from
 ```
@@ -48,7 +55,7 @@ The official rbdl-orb git repository can be cloned from
 To make sure all submodules are correctly downloaded, clone the repository recursively!
 
 ```
-git clone --recurive https://github.com/ORB-HD/rbdl-orb
+git clone --recursive https://github.com/ORB-HD/rbdl-orb
 ```
 
 Upgrading from an older version of RBDL
@@ -79,32 +86,32 @@ Building and Installation
 ```
 2. Install git
 ```
-  sudo apt install -y git-core
+  sudo apt install git-core
 ```
 
 3. Install cmake 
 ```
-  sudo apt install -y cmake
+  sudo apt install cmake
 ```
 
 4. Install Eigen3
   RBDL uses Eigen3 for efficient computations ([http://eigen.tuxfamily.org](http://eigen.tuxfamily.org)). 
 
 ```
-  sudo apt install -y libeigen3-dev
+  sudo apt install libeigen3-dev
 ```
 
 5. Install a c++ compiler
   The choice of compiler can have a large effect on performance. Consider evaluating a few different compilers, such as Clang, for the best performance.
 
 ```
-  sudo apt install -y build-essential
+  sudo apt-get install build-essential
 ```
 
 6. Install cmake-curses *(optional)*
     If you are planning on taking advantage of the many addons and other build options we recommend that you use cmake-curses as it makes the build configuration process faster and less prone to error.
 ```
-  sudo apt install -y cmake-curses-gui
+  sudo apt install cmake-curses-gui
 ```
 
 7. Install Catch2 *(optional)*
@@ -142,7 +149,7 @@ at which point you will see full list of build options for RBDL. We recommend th
 
 1. Install doxygen
 ```  
-    sudo apt install -y doxygen
+    sudo apt install doxygen
 ```
 
 2. Build the doxygen:
@@ -158,7 +165,7 @@ at which point you will see full list of build options for RBDL. We recommend th
 1. Install Boost *(optional)*
   Boost is needed to run many of the example simulations that come with RBDL.
   ```
-  sudo apt install -y libboost-all-dev
+  sudo apt install libboost-all-dev
   ```    
 
 ## Linux: RBDL's addon dependencies
@@ -167,8 +174,8 @@ at which point you will see full list of build options for RBDL. We recommend th
   -  If you'd like to load model files written in Lua to RBDL. Without this addon you will need to build models programmatically, or read them in using the URDF addon. To do so:
   - Install Lua51 
   ```
-    sudo apt install -y lua5.1
-    sudo apt install -y liblua5.1-0-dev
+    sudo apt install lua5.1
+    sudo apt install liblua5.1-0-dev
   ```
   - Build RBDL with
   ```
@@ -199,10 +206,10 @@ at which point you will see full list of build options for RBDL. We recommend th
   - Install Ipopt. One of the easier ways to do this is to follow these instructions from [Ipopt's online documentation](https://www.coin-or.org/Ipopt/documentation/node12.html#SECTION00042300000000000000) which guides you through the process. Instructions to build the code appear in the README located in the Ipopt folder
   - Configure RBDL's cmake file with these flags set to 'On'
   ```
-          RBDL_BUILD_ADDON_GEOMETRY        ON                                           
-          RBDL_BUILD_ADDON_LUAMODEL        ON                                           
-          RBDL_BUILD_ADDON_MUSCLE          ON                                          
-          RBDL_BUILD_ADDON_MUSCLE_FITTING  ON  
+          RBDL_BUILD_ADDON_GEOMETRY        ON
+          RBDL_BUILD_ADDON_LUAMODEL        ON
+          RBDL_BUILD_ADDON_MUSCLE          ON
+          RBDL_BUILD_ADDON_MUSCLE_FITTING  ON
   ```
     
   - Set the CUSTOM_IPOPT_PATH to the main Ipopt directory.
@@ -243,7 +250,7 @@ you can install it using setup.py. This is done automatically when using
   ```
   - If you already have python3 installed system-wide then you can get the remaining libraries with
   ```
-  sudo apt install -y cython3 python3-numpy python3-scipy python3-matplotlib
+  sudo apt install cython3 python3-numpy python3-scipy python3-matplotlib
   ```
   - If you are not using Ubuntu 18.04, and do not currently have python3, please
     look for instructions online to install these libraries on your system.     

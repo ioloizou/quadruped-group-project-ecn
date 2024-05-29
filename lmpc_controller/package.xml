@@ -19,12 +19,14 @@
   <build_depend>quad_msgs</build_depend>
   <build_depend>Eigen3</build_depend>
   <build_depend>OsqpEigen</build_depend>
+  <build_depend>quad_utils</build_depend>
 
   <exec_depend>roscpp</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>quad_msgs</exec_depend>
   <exec_depend>Eigen3</exec_depend>
   <exec_depend>OsqpEigen</exec_depend>
+  <exec_depend>quad_utils</exec_depend>
  
   <export>
     <build_type>cmake</build_type>

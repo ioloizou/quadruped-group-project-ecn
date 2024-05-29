@@ -6,6 +6,11 @@
 #include <iostream>
 #include <chrono>
 
+#include <ros/ros.h>
+#include <quad_utils/ros_utils.h>
+#include <quad_msgs/RobotState.h>
+
+
 //Constants - Declared here because inside the class does not work
 
 //g = acceleration of gravity [m/s^2]
@@ -61,7 +66,16 @@ class MPC{
 public:
     
     // Constructor
-    MPC(){
+    MPC(ros::NodeHandle &nh, int robot_id){
+        
+        //ROS parameters
+        nh_ = nh;
+        robot_id_ = robot_id;
+
+        //Subscribers:
+        state_sub = nh_.subscribe<quad_msgs::RobotState>("/robot_1/state/ground_truth", 1, &MPC::getState, this);
+        state_ref_sub = nh_.subscribe<quad_msgs::RobotState>("/robot_1/state/trajectory", 1, &MPC::getRef, this);
+        
         // Parameters initialization with values from paper
         mu = 0.6;
         fz_min = 10;
@@ -317,7 +331,7 @@ public:
      * @returns = none
      */
     void setAcMatrix(){
-        
+        g_block.resize(NUM_BOUNDS , NUM_DOF/LEGS);
         g_block << 1,0,mu,  // fx + mu*fz
                    1,0,-mu, // fx - mu*fz
                    0,1,mu,  // fy + mu*fz
@@ -431,6 +445,7 @@ public:
      * @returns = none
     */
     void setGradient(){
+        gradient.resize(NUM_DOF * HORIZON_LENGTH, 1);
         auto temp = hessian * U_vector;
         gradient = temp + 2*Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix * (states - states_reference));
   
@@ -497,10 +512,19 @@ public:
     void printResults()
     {}
 
+    void getState(const quad_msgs::RobotState::ConstPtr &msg){
+
+    }
+
+    void getRef(const quad_msgs::RobotState::ConstPtr &msg){
+
+    }
+
     // Parameters
     double mu;
     double fz_min;
     double fz_max;
+
     Eigen::VectorXd states; // Dummy values until we get the real states
     Eigen::VectorXd states_reference; // Dummy values until we get the real states
     Eigen::VectorXd U_vector;
@@ -524,14 +548,28 @@ public:
     Eigen::Matrix<double, NUM_DOF * HORIZON_LENGTH, 1> gradient;
     Eigen::SparseMatrix<double> hessian;
 
+
     bool is_first_run = true;  //to be set to false after first iteration, so that the initial guess is correctly set to hot-start the solver
+
+    //ROS Stuff:
+    ros::NodeHandle nh_;
+    int robot_id_;
+
+    ros::Subscriber state_sub;
+    ros::Subscriber state_ref_sub;
 };
 
-int main(){
+int main(int argc, char** argv){
     
+    ros::init(argc, argv, "mpc_controller_node");
+    ros::NodeHandle nh;
+    int robot_id = 1;
+    MPC mpc(nh, robot_id);
+    
+    //-----------------------------------------------------------
     auto start = std::chrono::high_resolution_clock::now();
 
-    MPC mpc;
+    //MPC mpc;
     mpc.initMatricesZero();
 
     Eigen::VectorXd q_weights = Eigen::VectorXd::Ones(NUM_STATE);

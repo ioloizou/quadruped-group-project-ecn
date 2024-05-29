@@ -5,6 +5,7 @@ find_package(catkin REQUIRED COMPONENTS
     roscpp
     std_msgs
     quad_msgs
+    quad_utils
 )
 find_package(Eigen3 REQUIRED)
 find_package(OsqpEigen REQUIRED)
@@ -12,7 +13,7 @@ find_package(OsqpEigen REQUIRED)
 catkin_package(
     #INCLUDE_DIRS include
     LIBRARIES ${PROJECT_NAME}
-    CATKIN_DEPENDS roscpp std_msgs quad_msgs
+    CATKIN_DEPENDS roscpp std_msgs quad_msgs quad_utils
     #LIBRARIES lmpc_controller
 )
 
