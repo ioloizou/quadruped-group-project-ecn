@@ -11,7 +11,7 @@ find_package(Eigen3 REQUIRED)
 find_package(OsqpEigen REQUIRED)
 
 catkin_package(
-    #INCLUDE_DIRS include
+    INCLUDE_DIRS include
     LIBRARIES ${PROJECT_NAME}
     CATKIN_DEPENDS roscpp std_msgs quad_msgs quad_utils
     #LIBRARIES lmpc_controller
@@ -22,6 +22,7 @@ include_directories(
     ${EIGEN3_INCLUDE_DIR}
     /usr/local/include/osqp
     ${OsqpEigen_INCLUDE_DIRS}
+    include
 )
 
 add_executable(linear_mpc src/lmpc_controller.cpp)
