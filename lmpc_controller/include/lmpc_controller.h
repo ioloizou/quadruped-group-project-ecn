@@ -1,3 +1,4 @@
+
 #include "OsqpEigen/OsqpEigen.h"
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
@@ -5,6 +6,10 @@
 #include <cmath>
 #include <iostream>
 #include <chrono>
+
+#include <ros/ros.h>
+#include <quad_utils/ros_utils.h>
+#include <quad_msgs/RobotState.h>
 
 //Constants - Declared here because inside the class does not work
 
@@ -65,7 +70,7 @@ public:
         // Parameters initialization with values from paper
         mu = 0.6;
         fz_min = 10;
-        fz_max = 666;
+        fz_max = 666;        
         states = Eigen::VectorXd::Random(NUM_STATE); // Dummy values until we get the real states
         states_reference = Eigen::VectorXd::Random(NUM_STATE); // Dummy values until we get the real states
         U_vector = Eigen::VectorXd::Random(NUM_DOF*HORIZON_LENGTH); // Dummy values until we get the real states
@@ -317,7 +322,7 @@ public:
      * @returns = none
      */
     void setAcMatrix(){
-        
+        g_block.resize(NUM_BOUNDS , NUM_DOF/LEGS);
         g_block << 1,0,mu,  // fx + mu*fz
                    1,0,-mu, // fx - mu*fz
                    0,1,mu,  // fy + mu*fz
@@ -431,6 +436,7 @@ public:
      * @returns = none
     */
     void setGradient(){
+        gradient.resize(NUM_DOF * HORIZON_LENGTH, 1);
         auto temp = hessian * U_vector;
         gradient = temp + 2*Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix * (states - states_reference));
   
@@ -501,6 +507,7 @@ public:
     double mu;
     double fz_min;
     double fz_max;
+
     Eigen::VectorXd states; // Dummy values until we get the real states
     Eigen::VectorXd states_reference; // Dummy values until we get the real states
     Eigen::VectorXd U_vector;
@@ -524,41 +531,6 @@ public:
     Eigen::Matrix<double, NUM_DOF * HORIZON_LENGTH, 1> gradient;
     Eigen::SparseMatrix<double> hessian;
 
+
     bool is_first_run = true;  //to be set to false after first iteration, so that the initial guess is correctly set to hot-start the solver
 };
-
-int main(){
-    
-    auto start = std::chrono::high_resolution_clock::now();
-
-    MPC mpc;
-    mpc.initMatricesZero();
-
-    Eigen::VectorXd q_weights = Eigen::VectorXd::Ones(NUM_STATE);
-    mpc.setQMatrix(q_weights);
-
-    Eigen::VectorXd r_weights = Eigen::VectorXd::Ones(NUM_DOF);
-    mpc.setRMatrix(r_weights);
-
-    auto Rotation_z = mpc.setRotationMatrix(Eigen::Vector3d(0.5, 0.7, 0.6));
-    mpc.setAMatrixContinuous(Rotation_z);
-    mpc.setAMatrixDiscrete();
-    mpc.setBMatrixContinuous();
-    mpc.setBMatrixDiscrete();
-    mpc.setAqpMatrix();
-    mpc.setBqpMatrix();
-    mpc.setAcMatrix();
-    mpc.setBounds();
-    mpc.setHessian();
-    mpc.setGradient();
-    mpc.setInitialGuess();
-
-    mpc.solveQP();
-
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> duration = end - start;
-
-    std::cout << "Total Time taken: " << duration.count() << " milliseconds" << std::endl;
-
-    return 0;
-}
