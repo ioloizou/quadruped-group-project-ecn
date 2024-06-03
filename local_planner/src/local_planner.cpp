@@ -1,12 +1,10 @@
 #include "local_planner/local_planner.h"
-#include "lmpc_controller/lmpc_controller.h"
 
 Eigen::IOFormat CleanFmt(4, 0, ", ", "\n", "[", "]");
 
 LocalPlanner::LocalPlanner(ros::NodeHandle nh)
     : local_body_planner_nonlinear_(), local_footstep_planner_() {
   nh_ = nh;
-
   // Load rosparams from parameter server
   std::string terrain_map_topic, body_plan_topic, robot_state_topic,
       local_plan_topic, foot_plan_discrete_topic, foot_plan_continuous_topic,
@@ -66,7 +64,7 @@ LocalPlanner::LocalPlanner(ros::NodeHandle nh)
   nh.param<bool>("local_planner/use_twist_input", use_twist_input_, false);
 
   // Convert kinematics
-  quadKD_ = std::make_shared<quad_utils::QuadKD>();
+  quadKD_ = std::make_shared<quad_utils::QuadKD>(); // weeeeee neeeeed toooo undeeerstand
 
   // Initialize body and foot position arrays (grf_plan horizon is one index
   // shorter since control after last state is not in the horizon)
@@ -88,6 +86,7 @@ LocalPlanner::LocalPlanner(ros::NodeHandle nh)
   // Initialize body and footstep planners
   initLocalBodyPlanner();
   initLocalFootstepPlanner();
+  initLocalBodyPlannerLinear(); // MPC BOYS
 
   // Initialize twist input variables
   cmd_vel_.resize(6);
@@ -96,14 +95,14 @@ LocalPlanner::LocalPlanner(ros::NodeHandle nh)
   first_plan_ = true;
 
   // Initialize stand pose
-  stand_pose_.fill(std::numeric_limits<double>::max());
+  stand_pose_.fill(std::numeric_limits<double>::max()); // whyyyyyy
   control_mode_ = STAND;
 
   // Initialize the time duration to the next plan index
   first_element_duration_ = dt_;
 
   // Initialize the plan index diff
-  plan_index_diff_ = 0;
+  plan_index_diff_ = 0; 
 
   // Initialize the plan index
   current_plan_index_ = 0;
@@ -120,6 +119,18 @@ void LocalPlanner::initLocalBodyPlanner() {
     ROS_WARN("WRONG ROBOT TYPE");
   }
   local_body_planner_nonlinear_ = std::make_shared<NMPCController>(nh_, type);
+}
+
+void LocalPlanner::initLocalBodyPlannerLinear(){
+  SystemID type;
+    if (robot_name_ == "spirit") {
+    type = SPIRIT;
+  } else if (robot_name_ == "a1") {
+    type = A1;
+  } else {
+    ROS_WARN("WRONG ROBOT TYPE");
+  }
+  local_body_planner_linear_ = std::make_shared<MPC>(); // maybe we need to add nh and type
 }
 
 void LocalPlanner::initLocalFootstepPlanner() {
@@ -210,7 +221,7 @@ void LocalPlanner::cmdVelCallback(const geometry_msgs::Twist::ConstPtr &msg) {
   last_cmd_vel_msg_time_ = ros::Time::now();
 }
 
-void LocalPlanner::getReference() {
+void LocalPlanner::getReference() { // what is this function doing?
   if (first_plan_) {
     first_plan_ = false;
     past_footholds_msg_ = robot_state_msg_->feet;
@@ -475,14 +486,19 @@ bool LocalPlanner::computeLocalPlan() {
   current_full_state.segment(12, 12) = joint_pos;
   current_full_state.segment(24, 12) = joint_vel;
 
+  // Case, either use nonlinear or linear
+  if (is_linear_){
+      //OUR STUFF
+  }else{
   // Compute leg plan with MPC, return if solve fails
-  if (!local_body_planner_nonlinear_->computeLegPlan(
-          current_full_state, ref_body_plan_, grf_positions_body,
-          grf_positions_world, foot_velocities_world_, contact_schedule_,
-          ref_ground_height_, first_element_duration_, plan_index_diff_,
-          terrain_grid_, body_plan_, grf_plan_))
-    return false;
-
+    if (!local_body_planner_nonlinear_->computeLegPlan(
+            current_full_state, ref_body_plan_, grf_positions_body,
+            grf_positions_world, foot_velocities_world_, contact_schedule_,
+            ref_ground_height_, first_element_duration_, plan_index_diff_,
+            terrain_grid_, body_plan_, grf_plan_))
+      return false;
+  } // we need to check again if this is correct here
+  
   N_current_ = body_plan_.rows();
   foot_positions_world_ = grf_positions_world;
   for (size_t i = 0; i < 4; i++) {
