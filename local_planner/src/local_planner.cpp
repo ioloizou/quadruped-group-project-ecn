@@ -1,4 +1,5 @@
 #include "local_planner/local_planner.h"
+#include "lmpc_controller/lmpc_controller.h"
 
 Eigen::IOFormat CleanFmt(4, 0, ", ", "\n", "[", "]");
 

@@ -1,4 +1,5 @@
-#include "lmpc_controller.h"
+// #include "lmpc_controller.h"
+#include "lmpc_controller/lmpc_controller.h"
 
 
 int main(){

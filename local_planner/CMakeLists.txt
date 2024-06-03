@@ -26,13 +26,14 @@ find_package(catkin REQUIRED COMPONENTS
 
 ## System dependencies are found with CMake's conventions
 find_package(Eigen3 REQUIRED)
-# find_package(OsqpEigen REQUIRED)
+find_package(OsqpEigen REQUIRED)
+find_package(osqp REQUIRED)
 find_package(PythonLibs 2.7)
 
 catkin_package(
   INCLUDE_DIRS include
   CATKIN_DEPENDS roscpp std_msgs quad_msgs quad_utils grid_map_core grid_map_ros eigen_conversions nmpc_controller lmpc_controller
-  DEPENDS EIGEN3
+  DEPENDS EIGEN3 OsqpEigen
 )
 
 ###########
@@ -45,9 +46,12 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
+  ${lmpc_controller_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
   ${PYTHON_INCLUDE_DIRS}
   /usr/local/include/coin-or
+  /usr/local/include/osqp
+  ${OsqpEigen_INCLUDE_DIRS}
 )
 link_directories(/usr/local/lib)
 
@@ -55,6 +59,13 @@ link_directories(/usr/local/lib)
 add_library(local_planner
   src/local_planner.cpp
   src/local_footstep_planner.cpp
+)
+
+target_link_libraries(local_planner
+  ${catkin_LIBRARIES}
+  ${lmpc_controller_LIBRARIES}
+  Eigen3::Eigen
+  OsqpEigen::OsqpEigen
 )
 
 add_dependencies(local_planner ${local_planner_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
@@ -67,8 +78,10 @@ add_executable(local_planner_node src/local_planner_node.cpp)
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(local_planner_node
+${catkin_LIBRARIES}
+${lmpc_controller_LIBRARIES}
   local_planner
-  ${catkin_LIBRARIES}
+  OsqpEigen::OsqpEigen
 )
 
 #############
@@ -81,6 +94,3 @@ target_link_libraries(local_footstep_planner_test local_planner ${catkin_LIBRARI
 
 catkin_add_gtest(local_planner_test test/test_local_planner.cpp)
 target_link_libraries(local_planner_test local_planner ${catkin_LIBRARIES})
-
-
-
