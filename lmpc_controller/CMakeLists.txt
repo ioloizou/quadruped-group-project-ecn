@@ -15,7 +15,9 @@ catkin_package(
     INCLUDE_DIRS include
     LIBRARIES ${PROJECT_NAME}
     CATKIN_DEPENDS roscpp std_msgs quad_msgs quad_utils
-    #LIBRARIES lmpc_controller
+    DEPENDS EIGEN3
+    DEPENDS OsqpEigen
+    LIBRARIES lmpc_controller
 )
 
 include_directories(
@@ -32,15 +34,27 @@ target_link_libraries(linear_mpc
     Eigen3::Eigen
     OsqpEigen::OsqpEigen
 )
+
 install(TARGETS linear_mpc
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
 # Declare a C++ library
-# add_library(lmpc_controller_lib
-#     src/lmpc_controller.cpp
-#     # add other source files here
-#  )
+add_library(lmpc_controller
+    src/lmpc_controller.cpp
+    #add other source files here
+)
+
+target_link_libraries(lmpc_controller 
+    ${catkin_LIBRARIES}
+    Eigen3::Eigen
+    OsqpEigen::OsqpEigen
+)
+
+add_dependencies(lmpc_controller
+    ${lmpc_controller_EXPORTED_TARGETS}
+    ${catkin_EXPORTED_TARGETS}
+)
 # add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 # add_executable(${PROJECT_NAME}_node src/lmpc_controller_node.cpp)
