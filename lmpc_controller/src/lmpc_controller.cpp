@@ -1,7 +1,7 @@
 #include "lmpc_controller.h"
 
 
-int main(int argc, char** argv){
+int main(){
     
     auto start = std::chrono::high_resolution_clock::now();
 

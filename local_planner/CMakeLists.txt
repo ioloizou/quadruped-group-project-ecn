@@ -21,6 +21,7 @@ find_package(catkin REQUIRED COMPONENTS
   grid_map_ros
   eigen_conversions
   nmpc_controller
+  #lmpc_controller
 )
 
 ## System dependencies are found with CMake's conventions
@@ -30,7 +31,7 @@ find_package(PythonLibs 2.7)
 
 catkin_package(
   INCLUDE_DIRS include
-  CATKIN_DEPENDS roscpp std_msgs quad_msgs quad_utils grid_map_core grid_map_ros eigen_conversions nmpc_controller
+  CATKIN_DEPENDS roscpp std_msgs quad_msgs quad_utils grid_map_core grid_map_ros eigen_conversions nmpc_controller #lmpc_controller
   DEPENDS EIGEN3
 )
 

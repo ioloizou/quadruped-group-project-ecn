@@ -8,6 +8,7 @@ find_package(catkin REQUIRED COMPONENTS
     quad_utils
 )
 find_package(Eigen3 REQUIRED)
+find_package(osqp REQUIRED)
 find_package(OsqpEigen REQUIRED)
 
 catkin_package(
@@ -35,11 +36,11 @@ install(TARGETS linear_mpc
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
-## Declare a C++ library
-# add_library(${PROJECT_NAME}
-#   src/${PROJECT_NAME}/lmpc_controller.cpp
-# )
-
+# Declare a C++ library
+# add_library(lmpc_controller_lib
+#     src/lmpc_controller.cpp
+#     # add other source files here
+#  )
 # add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 # add_executable(${PROJECT_NAME}_node src/lmpc_controller_node.cpp)

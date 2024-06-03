@@ -1,3 +1,5 @@
+#ifndef LMPC_CONTROLLER_H
+#define LMPC_CONTROLLER_H
 
 #include "OsqpEigen/OsqpEigen.h"
 #include <Eigen/Dense>
@@ -534,3 +536,5 @@ public:
 
     bool is_first_run = true;  //to be set to false after first iteration, so that the initial guess is correctly set to hot-start the solver
 };
+
+#endif //LMPC_CONTROLLER_H
