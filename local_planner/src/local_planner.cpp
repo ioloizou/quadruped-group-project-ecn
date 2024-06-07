@@ -86,7 +86,7 @@ LocalPlanner::LocalPlanner(ros::NodeHandle nh)
   // Initialize body and footstep planners
   initLocalBodyPlanner();
   initLocalFootstepPlanner();
-  initLocalBodyPlannerLinear(); // MPC BOYS
+  //initLocalBodyPlannerLinear(); // MPC BOYS
 
   // Initialize twist input variables
   cmd_vel_.resize(6);
@@ -121,17 +121,21 @@ void LocalPlanner::initLocalBodyPlanner() {
   local_body_planner_nonlinear_ = std::make_shared<NMPCController>(nh_, type);
 }
 
-void LocalPlanner::initLocalBodyPlannerLinear(){
-  SystemID type;
-    if (robot_name_ == "spirit") {
-    type = SPIRIT;
-  } else if (robot_name_ == "a1") {
-    type = A1;
-  } else {
-    ROS_WARN("WRONG ROBOT TYPE");
-  }
-  local_body_planner_linear_ = std::make_shared<MPC>(); // maybe we need to add nh and type
-}
+// void LocalPlanner::initLocalBodyPlannerLinear(){
+//   SystemID type;
+//     if (robot_name_ == "spirit") {
+//     type = SPIRIT;
+//   } else if (robot_name_ == "a1") {
+//     type = A1;
+//   } else {
+//     ROS_WARN("WRONG ROBOT TYPE");
+//   }
+//   local_body_planner_linear_ = std::make_shared<MPC>(); // maybe we need to add nh and type
+//   //Initialize what is ran once in the LMPC:
+//   local_body_planner_linear_ -> initMatricesZero();
+//   local_body_planner_linear_ ->setQMatrix();
+//   local_body_planner_linear_ ->setRMatrix();
+// }
 
 void LocalPlanner::initLocalFootstepPlanner() {
   // Load parameters from server
@@ -490,29 +494,26 @@ bool LocalPlanner::computeLocalPlan() {
   current_full_state.segment(12, 12) = joint_pos;
   current_full_state.segment(24, 12) = joint_vel;
   
-  // Flag to use linear or nonlinear
-  is_linear_ = true;
-  // Case, either use nonlinear or linear
-  if (is_linear_){
-      //OUR STUFF
-    
-    local_body_planner_linear_ -> initMatricesZero();
-    local_body_planner_linear_ ->setQMatrix();
-    local_body_planner_linear_ ->setRMatrix();
-    auto rotation_z = local_body_planner_linear_ ->setRotationMatrix(Eigen::Vector3d(0.5, 0.7, 0.6)); // check argument
-    local_body_planner_linear_ ->setAMatrixContinuous(rotation_z); // pass Rotation matrix , check argument
-    local_body_planner_linear_ ->setAMatrixDiscrete();
-    local_body_planner_linear_ ->setBMatrixContinuous();
-    local_body_planner_linear_ ->setBMatrixDiscrete(); 
-    local_body_planner_linear_->setAqpMatrix();
-    local_body_planner_linear_->setBqpMatrix();
-    local_body_planner_linear_->setAcMatrix();
-    local_body_planner_linear_->setBounds();
-    local_body_planner_linear_->setHessian();
-    local_body_planner_linear_->setGradient();
-    local_body_planner_linear_->setInitialGuess();
-    local_body_planner_linear_->solveQP();
-  }else{
+  // // Flag to use linear or nonlinear
+  // is_linear_ = true;
+  // // Case, either use nonlinear or linear
+  // if (is_linear_){
+  //   //OUR STUFF
+  //   auto average_yaw = local_body_planner_linear_->extractPsi(ref_body_plan_);
+  //   auto rotation_z = local_body_planner_linear_ ->setRotationMatrix(average_yaw);
+  //   local_body_planner_linear_->setAMatrixContinuous(rotation_z);
+  //   local_body_planner_linear_->setAMatrixDiscrete();
+  //   local_body_planner_linear_->setBMatrixContinuous(foot_positions_world_); 
+  //   local_body_planner_linear_->setBMatrixDiscrete(); 
+  //   local_body_planner_linear_->setAqpMatrix();
+  //   local_body_planner_linear_->setBqpMatrix();
+  //   local_body_planner_linear_->setAcMatrix();
+  //   local_body_planner_linear_->setBounds(contact_schedule_);
+  //   local_body_planner_linear_->setHessian();
+  //   local_body_planner_linear_->setGradient(grf_plan_, current_state_, ref_body_plan_);
+  //   local_body_planner_linear_->setInitialGuess();
+  //   grf_plan_ = local_body_planner_linear_->solveQP();
+  // }else{
   // Compute leg plan with MPC, return if solve fails
     if (!local_body_planner_nonlinear_->computeLegPlan(
             current_full_state, ref_body_plan_, grf_positions_body,
@@ -520,7 +521,7 @@ bool LocalPlanner::computeLocalPlan() {
             ref_ground_height_, first_element_duration_, plan_index_diff_,
             terrain_grid_, body_plan_, grf_plan_))
       return false;
-  } // we need to check again if this is correct here
+  // } // we need to check again if this is correct here
   
   N_current_ = body_plan_.rows(); 
   foot_positions_world_ = grf_positions_world;

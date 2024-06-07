@@ -30,7 +30,6 @@ const double g = 9.81;
 const int LEGS = 4;
 const int NUM_STATE = 13;
 const int NUM_DOF = 3 * LEGS;
-Eigen::Matrix<double, 3, LEGS> foot_positions;
 /**
  * HORIZON_LENGTH = number of steps in the horizon
  * ROBOT_MASS = Mass of the robot (10 [kg])
@@ -77,9 +76,10 @@ public:
         fz_max = 666;        
         //Initialize variables to zero
         states = Eigen::VectorXd::Zero(NUM_STATE);
+        states(13) = g;
         states_reference = Eigen::VectorXd::Zero(NUM_STATE);
         U_vector = Eigen::VectorXd::Zero(NUM_DOF*HORIZON_LENGTH);
-        foot_positions = Eigen::Matrix<double, 3, LEGS>::Zero();
+        //foot_positions = Eigen::Matrix<double, 3, LEGS>::Zero();
     }
     /**
      * Initializes the A_matrix_continuous and A_matrix_discrete matrices to zero.
@@ -98,13 +98,29 @@ public:
     }
     
     /**
+     * @brief This function calculates the average yaw angle (psi) in the whole horizon.
+     * 
+     * @param ref_body_plan The reference states of the body (each row is a state vector at a given horizon step)
+     * @return double The average yaw angle in the whole horizon (psi)
+     */
+    double extractPsi(Eigen::MatrixXd ref_body_plan){
+        double yaw_sum = 0;
+        for (int i = 0; i < HORIZON_LENGTH; i++)
+        {
+            yaw_sum += ref_body_plan(i, 5);
+        }
+        double psi = yaw_sum / HORIZON_LENGTH;
+        return psi;
+    }
+    
+    /**
      * @brief Sets the rotation matrix (from body to world frame) based on the given Euler angles.
      * The robot’s orientation is expressed as a vector of Z-Y-X Euler angles Θ = [φ θ ψ]ᵀ where ψ is the yaw, θ is the pitch, and φ is the roll.
      * 
      * @param euler_angles The Euler angles representing the rotation of the body respect to the inertial/world frame.
      */
-    Eigen::Matrix3d setRotationMatrix(Eigen::Vector3d euler_angles){
-        double psi = euler_angles(2);
+    Eigen::Matrix3d setRotationMatrix(double average_yaw){
+        double psi = average_yaw;
 
         Eigen::Matrix3d Rotation_z;
         
@@ -119,12 +135,7 @@ public:
     /**
      * @brief This function initializes a diagonal matrix for weights on the state error
      * It populates Q_matrix with q_weights in its diagonal entries.
-     * 
-     * @param[in] = q_weights. A vector of weights to be populated in the diagonal of Q_matrix
-     * @param[out] = Q_matrix. The Q_matrix for the cost function (diagonal)
-     * 
-     * @returns = None
-    */
+     */
     void setQMatrix(){
 
         // It doesnt let us declare size at the start so we need to initialize it here
@@ -205,7 +216,7 @@ public:
      * 
      * @returns = None
     */
-    void setBMatrixContinuous(){
+    void setBMatrixContinuous(Eigen::Matrix<double, 3, LEGS> foot_positions){
         for (int i=0; i<LEGS; i++)
         {
             // Using the paper B matrix as reference
@@ -374,36 +385,37 @@ public:
      * 
      * @param[out] = lower_bounds, upper_bounds - The vectors containing the bounds for the OSQP problem
     */
-    void setBounds(){
+    void setBounds(std::vector<std::vector<bool>> contact){
         
         // Declaring the lower and upper bounds
         Eigen::VectorXd lower_bounds(NUM_BOUNDS * LEGS);
         Eigen::VectorXd upper_bounds(NUM_BOUNDS * LEGS);
         
-        // Setting the bounds for each leg
-        for (int i=0; i<LEGS; i++)
+        lower_bounds_horizon = Eigen::VectorXd::Zero(NUM_BOUNDS * LEGS * HORIZON_LENGTH);
+        upper_bounds_horizon = Eigen::VectorXd::Zero(NUM_BOUNDS * LEGS * HORIZON_LENGTH);
+
+        int horizon_step = 0;
+        
+        while (horizon_step < HORIZON_LENGTH)
         {
+            for (int i=0; i<LEGS; i++)
+            {
             lower_bounds.segment<5>(i*NUM_BOUNDS) << 0,                                         //  0        <= fx + mu*fz
                                                      -std::numeric_limits<double>::infinity(),  // -infinity <= fx - mu*fz
                                                      0,                                         //  0        <= fy + mu*fz
                                                      -std::numeric_limits<double>::infinity(),  // -infinity <= fy - mu*fz
-                                                     fz_min;                                    //  fz_min   <= fz          fz_min*contact = 0 or 1 depending on the contact
+                                                     fz_min*contact[horizon_step][i];           //  fz_min   <= fz          fz_min*contact = 0 or 1 depending on the contact
                                                      
             upper_bounds.segment<5>(i*NUM_BOUNDS) << std::numeric_limits<double>::infinity(),   //  fx + mu*fz <= infinity
                                                      0,                                         //  fx - mu*fz <= 0
                                                      std::numeric_limits<double>::infinity(),   //  fy + mu*fz <= infinity
                                                      0,                                         //  fy - mu*fz <= 0
-                                                     fz_max;                                    //  fz <= fz_max            fz_max*contact = 0 or 1 depending on the contact
-        }
+                                                     fz_max*contact[horizon_step][i];           //  fz <= fz_max            fz_max*contact = 0 or 1 depending on the contact
+            }
 
-        // Creating horizon bounds
-        lower_bounds_horizon = Eigen::VectorXd::Zero(NUM_BOUNDS * LEGS * HORIZON_LENGTH);
-        upper_bounds_horizon = Eigen::VectorXd::Zero(NUM_BOUNDS * LEGS * HORIZON_LENGTH);
-        
-        for (int i=0; i<HORIZON_LENGTH; i++)
-        {
-            lower_bounds_horizon.segment<NUM_BOUNDS * LEGS>(i*NUM_BOUNDS*LEGS) = lower_bounds;
-            upper_bounds_horizon.segment<NUM_BOUNDS * LEGS>(i*NUM_BOUNDS*LEGS) = upper_bounds;
+            lower_bounds_horizon.segment<NUM_BOUNDS * LEGS>(horizon_step*NUM_BOUNDS*LEGS) = lower_bounds;
+            upper_bounds_horizon.segment<NUM_BOUNDS * LEGS>(horizon_step*NUM_BOUNDS*LEGS) = upper_bounds;
+            horizon_step += 1;
         }
         
         // std::cout<<"Lower bounds: \n"<<lower_bounds_horizon<<std::endl;
@@ -440,8 +452,12 @@ public:
      * 
      * @returns = none
     */
-    void setGradient(){
+    void setGradient(Eigen::VectorXd U_vector, Eigen::VectorXd current_state_, Eigen::VectorXd ref_body_plan_){
         gradient.resize(NUM_DOF * HORIZON_LENGTH, 1);
+        //Manipulate the inputs to satisfy our QP Implementation
+        states.segment(0,12) = current_state_;
+        states_reference = ref_body_plan_.row(0).transpose();
+        
         auto temp = hessian * U_vector;
         gradient = temp + 2*Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix * (states - states_reference));
   
@@ -471,7 +487,7 @@ public:
         //std::cout << "Initial Guess: \n" << initial_guess << std::endl;
     }
 
-    void solveQP(){
+    Eigen::VectorXd solveQP(){
         //Instantiate the solver
         OsqpEigen::Solver solver;
 
@@ -501,12 +517,19 @@ public:
 
         //print results
         Eigen::VectorXd result = solver.getSolution();
+        return result;
         //std::cout << "Result: \n" << result << std::endl;
         //std::cout << "Result Shape: " << result.rows() << " x " << result.cols() << std::endl;
     }
 
     void printResults()
     {}
+
+
+    //Update functions (to not set matrices from ground up all over again):
+    // void updateMatrices(Eigen::VectorXd state){
+
+    // }
 
     // Parameters
     double mu;
@@ -516,6 +539,7 @@ public:
     Eigen::VectorXd states; // Dummy values until we get the real states
     Eigen::VectorXd states_reference; // Dummy values until we get the real states
     Eigen::VectorXd U_vector;
+    
     
     //Matrices declaration
     Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_continuous;
@@ -535,6 +559,8 @@ public:
     
     Eigen::Matrix<double, NUM_DOF * HORIZON_LENGTH, 1> gradient;
     Eigen::SparseMatrix<double> hessian;
+
+    //Eigen::Matrix<double, 3, LEGS> foot_positions;  
 
 
     bool is_first_run = true;  //to be set to false after first iteration, so that the initial guess is correctly set to hot-start the solver
