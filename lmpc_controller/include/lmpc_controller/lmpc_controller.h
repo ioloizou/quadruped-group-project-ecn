@@ -18,7 +18,8 @@
 //g = acceleration of gravity [m/s^2]
 const double g = 9.81;
 
-/**NUM_STATE = dimension of state vector (X, Y, Z, Vx, Vy, Vz, θx, θy, θz wx, wy, wz, g)
+/**
+ * NUM_STATE = dimension of state vector (X, Y, Z, Vx, Vy, Vz, θx, θy, θz wx, wy, wz, g)
  * (position, lin. vel., orientation, ang. velocity, gravity)
  * due to the extension to hold the gravity term it comes to dimension 13
  * 
@@ -29,15 +30,16 @@ const double g = 9.81;
 const int LEGS = 4;
 const int NUM_STATE = 13;
 const int NUM_DOF = 3 * LEGS;
-const Eigen::Matrix<double, 3, LEGS> foot_positions = Eigen::Matrix<double, 3, LEGS>::Random(); //Random values until we get the real values
-
-/**HORIZON_LENGTH = number of steps in the horizon
+Eigen::Matrix<double, 3, LEGS> foot_positions;
+/**
+ * HORIZON_LENGTH = number of steps in the horizon
  * ROBOT_MASS = Mass of the robot (10 [kg])
 */
 const int HORIZON_LENGTH = 10;
 const double dt = 0.01;
 
-/**NUM_BOUNDS = Number of bounds for the constraints. In our case 5 since we had to divide each inequality
+/**
+ * NUM_BOUNDS = Number of bounds for the constraints. In our case 5 since we had to divide each inequality
  *                                                    into 2 bounds (4) + the contact constraint.
  *                                                   (Decide if there is a way to generalize this or user inputs a constant)
 */
@@ -73,11 +75,12 @@ public:
         mu = 0.6;
         fz_min = 10;
         fz_max = 666;        
-        states = Eigen::VectorXd::Random(NUM_STATE); // Dummy values until we get the real states
-        states_reference = Eigen::VectorXd::Random(NUM_STATE); // Dummy values until we get the real states
-        U_vector = Eigen::VectorXd::Random(NUM_DOF*HORIZON_LENGTH); // Dummy values until we get the real states
+        //Initialize variables to zero
+        states = Eigen::VectorXd::Zero(NUM_STATE);
+        states_reference = Eigen::VectorXd::Zero(NUM_STATE);
+        U_vector = Eigen::VectorXd::Zero(NUM_DOF*HORIZON_LENGTH);
+        foot_positions = Eigen::Matrix<double, 3, LEGS>::Zero();
     }
-   
     /**
      * Initializes the A_matrix_continuous and A_matrix_discrete matrices to zero.
      * 
@@ -122,7 +125,7 @@ public:
      * 
      * @returns = None
     */
-    void setQMatrix(Eigen::VectorXd &q_weights){
+    void setQMatrix(){
 
         // It doesnt let us declare size at the start so we need to initialize it here
         Q_matrix = Eigen::SparseMatrix<double>(NUM_STATE * HORIZON_LENGTH, NUM_STATE * HORIZON_LENGTH);
@@ -144,7 +147,7 @@ public:
      * 
      * @returns = None
     */    
-    void setRMatrix(Eigen::VectorXd &r_weights){
+    void setRMatrix(){
         R_matrix = Eigen::SparseMatrix<double>(NUM_DOF * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH);
         for (int i = 0; i < NUM_DOF * HORIZON_LENGTH; i++)
         {
@@ -535,6 +538,9 @@ public:
 
 
     bool is_first_run = true;  //to be set to false after first iteration, so that the initial guess is correctly set to hot-start the solver
+
+    Eigen::VectorXd q_weights = Eigen::VectorXd::Ones(NUM_STATE);
+    Eigen::VectorXd r_weights = Eigen::VectorXd::Ones(NUM_DOF);
 };
 
 #endif //LMPC_CONTROLLER_H

@@ -10,10 +10,10 @@ int main(){
     mpc.initMatricesZero();
 
     Eigen::VectorXd q_weights = Eigen::VectorXd::Ones(NUM_STATE);
-    mpc.setQMatrix(q_weights);
+    mpc.setQMatrix();
 
     Eigen::VectorXd r_weights = Eigen::VectorXd::Ones(NUM_DOF);
-    mpc.setRMatrix(r_weights);
+    mpc.setRMatrix();
 
     auto Rotation_z = mpc.setRotationMatrix(Eigen::Vector3d(0.5, 0.7, 0.6));
     mpc.setAMatrixContinuous(Rotation_z);

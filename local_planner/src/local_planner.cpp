@@ -192,11 +192,13 @@ void LocalPlanner::terrainMapCallback(
   local_footstep_planner_->updateMap(terrain_grid_);
 }
 
+// Save the most recent robot plan
 void LocalPlanner::robotPlanCallback(
     const quad_msgs::RobotPlan::ConstPtr &msg) {
   body_plan_msg_ = msg;
 }
 
+// Save the most recent robot state
 void LocalPlanner::robotStateCallback(
     const quad_msgs::RobotState::ConstPtr &msg) {
   // Make sure the data is actually populated
@@ -205,6 +207,7 @@ void LocalPlanner::robotStateCallback(
   robot_state_msg_ = msg;
 }
 
+// Calculating the commanded velocity with a filter
 void LocalPlanner::cmdVelCallback(const geometry_msgs::Twist::ConstPtr &msg) {
   // Ignore non-planar components of desired twist
   cmd_vel_[0] = (1 - cmd_vel_filter_const_) * cmd_vel_[0] +
@@ -221,7 +224,8 @@ void LocalPlanner::cmdVelCallback(const geometry_msgs::Twist::ConstPtr &msg) {
   last_cmd_vel_msg_time_ = ros::Time::now();
 }
 
-void LocalPlanner::getReference() { // what is this function doing?
+// Not clear yet what is doing
+void LocalPlanner::getReference() {
   if (first_plan_) {
     first_plan_ = false;
     past_footholds_msg_ = robot_state_msg_->feet;
@@ -485,10 +489,29 @@ bool LocalPlanner::computeLocalPlan() {
   quad_utils::vectorToEigen(robot_state_msg_->joints.velocity, joint_vel);
   current_full_state.segment(12, 12) = joint_pos;
   current_full_state.segment(24, 12) = joint_vel;
-
+  
+  // Flag to use linear or nonlinear
+  is_linear_ = true;
   // Case, either use nonlinear or linear
   if (is_linear_){
       //OUR STUFF
+    
+    local_body_planner_linear_ -> initMatricesZero();
+    local_body_planner_linear_ ->setQMatrix();
+    local_body_planner_linear_ ->setRMatrix();
+    auto rotation_z = local_body_planner_linear_ ->setRotationMatrix(Eigen::Vector3d(0.5, 0.7, 0.6)); // check argument
+    local_body_planner_linear_ ->setAMatrixContinuous(rotation_z); // pass Rotation matrix , check argument
+    local_body_planner_linear_ ->setAMatrixDiscrete();
+    local_body_planner_linear_ ->setBMatrixContinuous();
+    local_body_planner_linear_ ->setBMatrixDiscrete(); 
+    local_body_planner_linear_->setAqpMatrix();
+    local_body_planner_linear_->setBqpMatrix();
+    local_body_planner_linear_->setAcMatrix();
+    local_body_planner_linear_->setBounds();
+    local_body_planner_linear_->setHessian();
+    local_body_planner_linear_->setGradient();
+    local_body_planner_linear_->setInitialGuess();
+    local_body_planner_linear_->solveQP();
   }else{
   // Compute leg plan with MPC, return if solve fails
     if (!local_body_planner_nonlinear_->computeLegPlan(
@@ -499,7 +522,7 @@ bool LocalPlanner::computeLocalPlan() {
       return false;
   } // we need to check again if this is correct here
   
-  N_current_ = body_plan_.rows();
+  N_current_ = body_plan_.rows(); 
   foot_positions_world_ = grf_positions_world;
   for (size_t i = 0; i < 4; i++) {
     foot_positions_world_.col(3 * i + 2) =
