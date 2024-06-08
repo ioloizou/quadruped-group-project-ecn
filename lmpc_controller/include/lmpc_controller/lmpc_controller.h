@@ -35,7 +35,7 @@ const int NUM_DOF = 3 * LEGS;
  * ROBOT_MASS = Mass of the robot (10 [kg])
 */
 const int HORIZON_LENGTH = 10;
-const double dt = 0.01;
+const double dt = 0.03;
 
 /**
  * NUM_BOUNDS = Number of bounds for the constraints. In our case 5 since we had to divide each inequality
@@ -45,9 +45,13 @@ const double dt = 0.01;
 const int NUM_BOUNDS = 5;
 
 //A1_INERTIA_WORLD = Inertia Matrix of the robot in the world frame [kg*m/s^2].
-//ROBOT_MASS = Mass of the robot (10 [kg])
-const Eigen::Matrix3d A1_INERTIA_WORLD = Eigen::Matrix3d::Identity(); // Identity until we change for the real values
-const double ROBOT_MASS = 10;
+//ROBOT_MASS = Mass of the robot (5.75 [kg])
+const Eigen::Matrix3d A1_INERTIA_WORLD = (Eigen::Matrix3d() << 
+                                           0.0158533, -3.66*exp(-5), -6.11*exp(-5), 
+                                           -3.66*exp(-5), 0.0377999, -2.75*exp(-5),
+                                           -6.11*exp(-5), -2.75*exp(-5), 0.0456542).finished();
+const double ROBOT_MASS = 5.75;
+
 
 /**
  * @brief This function converts a 3D vector into a skew-symmetric matrix
@@ -221,7 +225,7 @@ public:
      * @returns = None
     */
     void setBMatrixContinuous(Eigen::MatrixXd foot_positions){
-        std::cout << "foot positions: \n" << foot_positions << std::endl;
+        // std::cout << "foot positions: \n" << foot_positions << std::endl;
         for (int i=0; i<LEGS; i++)
         {        
             // Using the paper B matrix as reference
@@ -231,7 +235,7 @@ public:
             B_matrix_continuous.block<3, 3>(6, 3*i) = A1_INERTIA_WORLD.inverse() * skew_symmetric_foot_position;
             B_matrix_continuous.block<3, 3>(9, 3*i) = Eigen::Matrix3d::Identity() * (1/ROBOT_MASS);
         }
-        std::cout << "B_matrix_continuous: \n" << B_matrix_continuous << std::endl;
+        // std::cout << "B_matrix_continuous: \n" << B_matrix_continuous << std::endl;
     }
 
     /**
