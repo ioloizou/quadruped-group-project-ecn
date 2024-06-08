@@ -285,7 +285,7 @@ void LocalPlanner::getReference() {
     // Check that we have recent twist data, otherwise set cmd_vel to zero
     ros::Duration time_elapsed_since_msg =
         ros::Time::now() - last_cmd_vel_msg_time_;
-    if (time_elapsed_since_msg.toSec() > last_cmd_vel_msg_time_max_ + 100000) {
+    if (time_elapsed_since_msg.toSec() > last_cmd_vel_msg_time_max_) {
       cmd_vel_.setZero();
       ROS_WARN_THROTTLE(1.0, "No cmd_vel data, setting twist cmd_vel to zero");
     }
@@ -591,8 +591,8 @@ void LocalPlanner::publishLocalPlan() {
   foot_plan_msg.header = local_plan_msg.header;
 
   // Add NLP diagnostic information
-  local_body_planner_nonlinear_->getNLPDiagnostics().loadDiagnosticsMsg(
-      local_plan_msg.diagnostics);
+  // local_body_planner_nonlinear_->getNLPDiagnostics().loadDiagnosticsMsg(
+  //     local_plan_msg.diagnostics);
 
   // Compute the discrete and continuous foot plan messages
   local_footstep_planner_->loadFootPlanMsgs(
