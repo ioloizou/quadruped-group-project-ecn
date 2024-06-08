@@ -69,7 +69,11 @@ class MPC{
 public:
     
     // Constructor
-    MPC(){
+    MPC(ros::NodeHandle &nh, int type){
+        
+        //ROS Stuff
+        nh_ = nh;
+        robot_id_ = type;
         // Parameters initialization with values from paper
         mu = 0.6;
         fz_min = 10;
@@ -216,17 +220,18 @@ public:
      * 
      * @returns = None
     */
-    void setBMatrixContinuous(Eigen::Matrix<double, 3, LEGS> foot_positions){
+    void setBMatrixContinuous(Eigen::MatrixXd foot_positions){
+        std::cout << "foot positions: \n" << foot_positions << std::endl;
         for (int i=0; i<LEGS; i++)
-        {
+        {        
             // Using the paper B matrix as reference
-            Eigen::Vector3d r = foot_positions.col(i);
+            Eigen::Vector3d r = foot_positions.row(0);
             Eigen::Matrix3d skew_symmetric_foot_position;
             vectorToSkewSymmetric(r, skew_symmetric_foot_position);
             B_matrix_continuous.block<3, 3>(6, 3*i) = A1_INERTIA_WORLD.inverse() * skew_symmetric_foot_position;
             B_matrix_continuous.block<3, 3>(9, 3*i) = Eigen::Matrix3d::Identity() * (1/ROBOT_MASS);
         }
-        // std::cout << "B_matrix_continuous: \n" << B_matrix_continuous << std::endl;
+        std::cout << "B_matrix_continuous: \n" << B_matrix_continuous << std::endl;
     }
 
     /**
@@ -530,6 +535,10 @@ public:
     // void updateMatrices(Eigen::VectorXd state){
 
     // }
+
+    //ROS Stuff
+    ros::NodeHandle nh_;
+    int robot_id_;
 
     // Parameters
     double mu;
