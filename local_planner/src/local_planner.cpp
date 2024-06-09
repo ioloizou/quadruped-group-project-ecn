@@ -529,7 +529,7 @@ bool LocalPlanner::computeLocalPlan() {
     ROS_INFO("Acontinuous matrix set");
     local_body_planner_linear_->setAMatrixDiscrete();
     ROS_INFO("Adiscrete matrix set");
-    local_body_planner_linear_->setBMatrixContinuous(foot_positions_world_); 
+    local_body_planner_linear_->setBMatrixContinuous(foot_positions_world_, rotation_z); 
     ROS_INFO("Bcontinuous matrix set");
     local_body_planner_linear_->setBMatrixDiscrete(); 
     ROS_INFO("Bdiscrete matrix set");

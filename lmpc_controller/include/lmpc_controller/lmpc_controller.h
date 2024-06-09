@@ -44,13 +44,13 @@ const double dt = 0.03;
 */
 const int NUM_BOUNDS = 5;
 
-//A1_INERTIA_WORLD = Inertia Matrix of the robot in the world frame [kg*m/s^2].
+//A1_INERTIA_BODY = Inertia Matrix of the robot in the body frame [kg*m/s^2].
 //ROBOT_MASS = Mass of the robot (5.75 [kg])
-const Eigen::Matrix3d A1_INERTIA_WORLD = (Eigen::Matrix3d() << 
-                                           0.0158533, -3.66*exp(-5), -6.11*exp(-5), 
-                                           -3.66*exp(-5), 0.0377999, -2.75*exp(-5),
-                                           -6.11*exp(-5), -2.75*exp(-5), 0.0456542).finished();
-const double ROBOT_MASS = 5.75;
+const Eigen::Matrix3d A1_INERTIA_BODY = (Eigen::Matrix3d() << 
+                                           0.0158533, -3.66 * std::pow(10, -5), -6.11 * std::pow(10, -5), 
+                                           -3.66 * std::pow(10, -5), 0.0377999, -2.75 * std::pow(10, -5),
+                                           -6.11 * std::pow(10, -5), -2.75 * std::pow(10, -5), 0.0456542).finished();
+const double ROBOT_MASS = 6;
 
 
 /**
@@ -224,8 +224,10 @@ public:
      * 
      * @returns = None
     */
-    void setBMatrixContinuous(Eigen::MatrixXd foot_positions){
+    void setBMatrixContinuous(Eigen::MatrixXd foot_positions, Eigen::Matrix3d Rotation_z){
         // std::cout << "foot positions: \n" << foot_positions << std::endl;
+        Eigen::Matrix3d A1_INERTIA_WORLD;
+        A1_INERTIA_WORLD = Rotation_z * A1_INERTIA_BODY * Rotation_z.transpose();
         for (int i=0; i<LEGS; i++)
         {        
             // Using the paper B matrix as reference
