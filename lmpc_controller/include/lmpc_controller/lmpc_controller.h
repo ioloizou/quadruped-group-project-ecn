@@ -86,6 +86,7 @@ public:
         states = Eigen::VectorXd::Zero(NUM_STATE);
         states(13) = g;
         states_reference = Eigen::VectorXd::Zero(NUM_STATE);
+        states_reference(13) = g;
         U_vector = Eigen::VectorXd::Zero(NUM_DOF*HORIZON_LENGTH);
         //foot_positions = Eigen::Matrix<double, 3, LEGS>::Zero();
     }
@@ -463,15 +464,24 @@ public:
      * 
      * @returns = none
     */
-    void setGradient(Eigen::VectorXd U_vector, Eigen::VectorXd current_state_, Eigen::VectorXd ref_body_plan_){
+    void setGradient(Eigen::VectorXd grf_plan_, Eigen::VectorXd current_state_, Eigen::VectorXd ref_body_plan_){
         gradient.resize(NUM_DOF * HORIZON_LENGTH, 1);
+        
         //Manipulate the inputs to satisfy our QP Implementation
         states.segment(0,12) = current_state_;
         states_reference = ref_body_plan_.row(0).transpose();
         
+        //Populate the U_vector with the values in grf_plan_:
+        for(int i = 0; i < HORIZON_LENGTH; i++){
+            U_vector.segment(i*NUM_DOF, 1) = grf_plan_.row(i).transpose();
+        }
+        
         auto temp = hessian * U_vector;
         gradient = temp + 2*Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix * (states - states_reference));
-  
+
+        // gradient = Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix *states) - states_reference;
+
+
         //std::cout << "Gradient: \n" << gradient << std::endl;
         //std::cout << "Shape: " << gradient.rows() << " x " << gradient.cols() << std::endl; 
     }
@@ -528,9 +538,9 @@ public:
 
         //print results
         Eigen::VectorXd result = solver.getSolution();
+        // std::cout << "Result Shape: " << result.rows() << " x " << result.cols() << std::endl;
+        std::cout << "Result: \n" << result.head(12) << std::endl;
         return result;
-        //std::cout << "Result: \n" << result << std::endl;
-        //std::cout << "Result Shape: " << result.rows() << " x " << result.cols() << std::endl;
     }
 
     void printResults()
