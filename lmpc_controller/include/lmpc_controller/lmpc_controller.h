@@ -156,6 +156,7 @@ public:
             Q_matrix.insert(i, i) = 2 * q_weights(i % NUM_STATE);
         }
         // std::cout << "Q_matrix: \n" << Q_matrix << std::endl;
+        // std::cout << "Q_matrix Shape: \n" << Q_matrix.rows() << " x " << Q_matrix.cols() << std::endl;
     }
 
     /**
@@ -174,6 +175,7 @@ public:
             R_matrix.insert(i, i) = 2 * r_weights(i % NUM_DOF);
         }
         // std::cout << "R_matrix: \n" << R_matrix << std::endl;
+        // std::cout << "R_matrix Shape: \n" << R_matrix.rows() << " x " << R_matrix.cols() << std::endl;
     }
 
     /**
@@ -191,6 +193,7 @@ public:
         A_matrix_continuous.block<3, 3>(3, 9) = Eigen::Matrix3d::Identity();
         A_matrix_continuous(11, 12) = 1; // Because of the augmented gravity term in the state space model
         // std::cout << "A_matrix_continuous: \n" << A_matrix_continuous << std::endl;
+        // std::cout << "A_matrix_continuous Shape: \n" << A_matrix_continuous.rows() << " x " << A_matrix_continuous.cols() << std::endl;
 
     }
 
@@ -209,6 +212,7 @@ public:
     void setAMatrixDiscrete(){
         A_matrix_discrete = Eigen::Matrix<double, NUM_STATE, NUM_STATE>::Identity(NUM_STATE, NUM_STATE) + A_matrix_continuous * dt;
         // std::cout << "A_matrix_discrete: \n" << A_matrix_discrete << std::endl;
+        // std::cout << "A_matrix_discrete Shape: \n" << A_matrix_discrete.rows() << " x " << A_matrix_discrete.cols() << std::endl;
         
     }
 
@@ -239,6 +243,8 @@ public:
             B_matrix_continuous.block<3, 3>(9, 3*i) = Eigen::Matrix3d::Identity() * (1/ROBOT_MASS);
         }
         // std::cout << "B_matrix_continuous: \n" << B_matrix_continuous << std::endl;
+        // std::cout << "B_matrix_continuous Shape: \n" << B_matrix_continuous.rows() << " x " << B_matrix_continuous.cols() << std::endl;
+
     }
 
     /**
@@ -256,6 +262,7 @@ public:
     void setBMatrixDiscrete(){
         B_matrix_discrete = B_matrix_continuous * dt;
         // std::cout << "B_matrix_discrete: \n" << B_matrix_discrete << std::endl;
+        // std::cout << "B_matrix_discrete Shape: \n" << B_matrix_discrete.rows() << " x " << B_matrix_discrete.cols() << std::endl;
     }
 
     /**
@@ -499,11 +506,11 @@ public:
     */    
     void setInitialGuess(){
         Eigen::VectorXd initial_guess = Eigen::VectorXd::Zero(NUM_STATE-1);
-        if (is_first_run == false){
-            //Retrieve the last minimizer correctly, for now it is a random vector
-            //Goal is to have: initial_guess = last_minimizer
-            initial_guess.setRandom();
-        }
+        // if (is_first_run == false){
+        //     //Retrieve the last minimizer correctly, for now it is a random vector
+        //     //Goal is to have: initial_guess = last_minimizer
+        //     initial_guess.setRandom();
+        // }
 
         //std::cout << "Initial Guess: \n" << initial_guess << std::endl;
     }

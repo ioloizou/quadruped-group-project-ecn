@@ -613,8 +613,8 @@ void LocalPlanner::publishLocalPlan() {
     quad_utils::ikRobotState(*quadKD_, robot_state_msg);
 
     // Add the GRF information
-    std::cout<<grf_plan_<<std::endl; // To see the grf plan
-    std::cout<<"-----------------------------------------------"<<std::endl;
+    // std::cout<<grf_plan_<<std::endl; // To see the grf plan
+    // std::cout<<"-----------------------------------------------"<<std::endl;
     quad_msgs::GRFArray grf_array_msg;
     quad_utils::eigenToGRFArrayMsg(grf_plan_.row(i), foot_plan_msg.states[i],
                                    grf_array_msg);
