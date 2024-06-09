@@ -490,8 +490,8 @@ public:
 
         //print results
         Eigen::VectorXd result = solver.getSolution();
-        //std::cout << "Result: \n" << result << std::endl;
-        //std::cout << "Result Shape: " << result.rows() << " x " << result.cols() << std::endl;
+        std::cout << "Result: \n" << result << std::endl;
+        std::cout << "Result Shape: " << result.rows() << " x " << result.cols() << std::endl;
     }
 
     void printResults()
