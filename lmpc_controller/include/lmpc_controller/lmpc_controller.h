@@ -69,6 +69,7 @@ void vectorToSkewSymmetric(Eigen::Vector3d vector, Eigen::Matrix3d &skew_symmetr
                       -vector(1), vector(0), 0;
 }
 
+/// @brief 
 class MPC{
 public:
     
@@ -101,6 +102,8 @@ public:
         A_matrix_continuous = Eigen::Matrix<double, NUM_STATE, NUM_STATE>::Zero();
         A_matrix_discrete = Eigen::Matrix<double, NUM_STATE, NUM_STATE>::Zero();
         B_matrix_continuous = Eigen::Matrix<double, NUM_STATE, NUM_DOF>::Zero();
+        B_matrix_continuous_list = Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_DOF>::Zero();
+        B_matrix_discrete_list = Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_DOF>::Zero();
         B_matrix_discrete = Eigen::Matrix<double, NUM_STATE, NUM_DOF>::Zero();
         Aqp_matrix = Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_STATE>::Zero();
         Bqp_matrix = Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_DOF * HORIZON_LENGTH>::Zero();
@@ -122,6 +125,36 @@ public:
         return psi;
     }
     
+    // A function that change the order of states like that 
+    // Quad = [x y z vx vy vz theta_x theta_y theta_z wx wy wz g]
+    // A1 = [theta_x theta_y theta_z x y z wx wy wz vx vy vz g]
+    void changeStatesOrder(Eigen::VectorXd &current_state_, Eigen::MatrixXd &states_reference_){ 
+        if (current_state_.size() == 12) {
+            Eigen::VectorXd temp = current_state_;
+            current_state_.segment(0, 3) = temp.segment(3, 3);
+            current_state_.segment(3, 3) = temp.segment(0, 3);
+            current_state_.segment(6, 3) = temp.segment(9, 3);
+            current_state_.segment(9, 3) = temp.segment(6, 3);
+            current_state_.segment(12, 1) = temp.segment(12, 1);
+        } else {
+            Eigen::MatrixXd temp = states_reference_;
+            Eigen::VectorXd temp1(NUM_STATE);
+            for (int i=0; i<HORIZON_LENGTH; i++){
+                temp1 = states_reference_.row(i);
+                states_reference_.row(i).segment(0, 3) = temp1.segment(6, 3); //old theta x,y,z go to positions 0, 1 ,2
+                states_reference_.row(i).segment(3, 3) = temp1.segment(0, 3); //old x y z go to positions 3, 4, 5
+                states_reference_.row(i).segment(6, 3) = temp1.segment(9, 3); //old omegas xyz go to positions 6, 7 ,8
+                states_reference_.row(i).segment(9, 3) = temp1.segment(3, 3); //old vx vy vz go to positions 9, 10, 11
+
+                // states_reference_.block<1, 3>(i*12, 3) = temp.segment(i*12+3, 3);
+                // states_reference_.block<1, 3>(i*12+3, 3) = temp.segment(i*12, 3);
+                // states_reference_.block<1, 3>(i*12+6, 3) = temp.segment(i*12+9, 3);
+                // states_reference_.block<1, 3>(i*12+9, 3) = temp.segment(i*12+6, 3);
+                // states_reference_.block<1, 3>(i*12+12, 1) = temp.segment(i*12+12, 1);
+            }      
+        }
+    }
+
     /**
      * @brief Sets the rotation matrix (from body to world frame) based on the given Euler angles.
      * The robot’s orientation is expressed as a vector of Z-Y-X Euler angles Θ = [φ θ ψ]ᵀ where ψ is the yaw, θ is the pitch, and φ is the roll.
@@ -227,16 +260,24 @@ public:
     */
     void setBMatrixContinuous(Eigen::MatrixXd foot_positions, Eigen::Matrix3d Rotation_z){
         // std::cout << "foot positions: \n" << foot_positions << std::endl;
+        
         Eigen::Matrix3d A1_INERTIA_WORLD;
         A1_INERTIA_WORLD = Rotation_z * A1_INERTIA_BODY * Rotation_z.transpose();
-        for (int i=0; i<LEGS; i++)
-        {        
-            // Using the paper B matrix as reference
-            Eigen::Vector3d r = foot_positions.row(0);
-            Eigen::Matrix3d skew_symmetric_foot_position;
-            vectorToSkewSymmetric(r, skew_symmetric_foot_position);
-            B_matrix_continuous.block<3, 3>(6, 3*i) = A1_INERTIA_WORLD.inverse() * skew_symmetric_foot_position;
-            B_matrix_continuous.block<3, 3>(9, 3*i) = Eigen::Matrix3d::Identity() * (1/ROBOT_MASS);
+        for (int i = 0; i < HORIZON_LENGTH; i++)
+        {    
+            for (int j=0; j<LEGS; j++)
+            {        
+                // Using the paper B matrix as reference
+                Eigen::Vector3d r = foot_positions.row(i);
+                Eigen::Matrix3d skew_symmetric_foot_position;
+                
+                vectorToSkewSymmetric(r, skew_symmetric_foot_position);
+                
+                B_matrix_continuous.block<3, 3>(6, 3*j) = A1_INERTIA_WORLD.inverse() * skew_symmetric_foot_position;
+                B_matrix_continuous.block<3, 3>(9, 3*j) = Eigen::Matrix3d::Identity() * (1/ROBOT_MASS);
+
+                B_matrix_continuous_list.block<NUM_STATE, NUM_DOF>(i*HORIZON_LENGTH, 0) = B_matrix_continuous;
+            }
         }
         // std::cout << "B_matrix_continuous: \n" << B_matrix_continuous << std::endl;
     }
@@ -254,7 +295,14 @@ public:
      * @returns = None
     */
     void setBMatrixDiscrete(){
-        B_matrix_discrete = B_matrix_continuous * dt;
+        Eigen::Matrix<double, NUM_STATE, NUM_DOF> current_B;
+        for (int i = 0; i < HORIZON_LENGTH; i++)
+        {
+            current_B = B_matrix_continuous_list.block<NUM_STATE, NUM_DOF>(i*NUM_STATE,0);
+            B_matrix_discrete = current_B * dt;
+            B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>(i*NUM_STATE, 0) = B_matrix_discrete;
+        }
+        
         // std::cout << "B_matrix_discrete: \n" << B_matrix_discrete << std::endl;
     }
 
@@ -311,13 +359,14 @@ public:
             for (int j=0; j<= i; j++){
                 if (i - j== 0)
                 {
-                    Bqp_matrix.block<NUM_STATE, NUM_DOF>(i * NUM_STATE, 0) = B_matrix_discrete;
+                    Bqp_matrix.block<NUM_STATE, NUM_DOF>(i * NUM_STATE, 0) = B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>(j*NUM_STATE, 0);
                 }
                 else
                 {   // I am not sure about this part
-                    Bqp_matrix.block<NUM_STATE, NUM_DOF>(i * NUM_STATE, j * NUM_DOF) = Aqp_matrix.block<NUM_STATE, NUM_STATE>((i -j - 1) * NUM_STATE, 0) * B_matrix_discrete;
+                    Bqp_matrix.block<NUM_STATE, NUM_DOF>(i * NUM_STATE, j * NUM_DOF) = 
+                    Aqp_matrix.block<NUM_STATE, NUM_STATE>((i -j - 1) * NUM_STATE, 0) * B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>(j*NUM_STATE,0);
                 }
-            }
+            }           
         }
         // std::cout << "Bqp_matrix: \n" << Bqp_matrix << std::endl;
     }
@@ -430,11 +479,11 @@ public:
             horizon_step += 1;
         }
         
-        // std::cout<<"Lower bounds: \n"<<lower_bounds_horizon<<std::endl;
-        // std::cout<<"Upper bounds: \n"<<upper_bounds_horizon<<std::endl;
+        std::cout<<"Lower bounds: \n"<<lower_bounds_horizon<<std::endl;
+        std::cout<<"Upper bounds: \n"<<upper_bounds_horizon<<std::endl;
 
-        // std::cout << "lower_bounds_horizon Shape: " << lower_bounds_horizon.rows() << " x " << lower_bounds_horizon.cols() << std::endl;
-        // std::cout << "upper_bounds_horizon Shape: " << upper_bounds_horizon.rows() << " x " << upper_bounds_horizon.cols() << std::endl;
+        std::cout << "lower_bounds_horizon Shape: " << lower_bounds_horizon.rows() << " x " << lower_bounds_horizon.cols() << std::endl;
+        std::cout << "upper_bounds_horizon Shape: " << upper_bounds_horizon.rows() << " x " << upper_bounds_horizon.cols() << std::endl;
     }
 
     /**
@@ -513,8 +562,8 @@ public:
         OsqpEigen::Solver solver;
 
         //Configure the solver
-        solver.settings()->setVerbosity(false);
-        solver.settings()->setWarmStart(false);
+        solver.settings()->setVerbosity(true);
+        solver.settings()->setWarmStart(true);
         solver.data()->setNumberOfVariables(NUM_DOF*HORIZON_LENGTH);
         solver.data()->setNumberOfConstraints(NUM_BOUNDS*LEGS*HORIZON_LENGTH);
         solver.data()->setLinearConstraintsMatrix(Ac_matrix);
@@ -570,7 +619,9 @@ public:
     Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_continuous;
     Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_discrete;
     Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_continuous;
-    Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_discrete;
+    Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_DOF> B_matrix_continuous_list;
+    Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_DOF> B_matrix_discrete_list;
+    Eigen::Matrix<double, NUM_STATE, NUM_DOF> B_matrix_discrete; 
     Eigen::SparseMatrix<double> Q_matrix;
     Eigen::SparseMatrix<double> R_matrix;
     Eigen::Matrix<double, NUM_STATE * HORIZON_LENGTH, NUM_STATE> Aqp_matrix;
