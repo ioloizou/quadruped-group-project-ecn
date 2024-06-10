@@ -294,6 +294,7 @@ public:
             }
         }
         // std::cout << "Aqp_matrix: \n" << Aqp_matrix << std::endl;
+        // std::cout << "Aqp_matrix Shape: " << Aqp_matrix.rows() << " x " << Aqp_matrix.cols() << std::endl;
     }
 
     /**
@@ -326,7 +327,8 @@ public:
                 }
             }
         }
-        // std::cout << "Bqp_matrix: \n" << Bqp_matrix << std::endl;
+        std::cout << "Bqp_matrix: \n" << Bqp_matrix << std::endl;
+        std::cout << "Bqp_matrix Shape: " << Bqp_matrix.rows() << " x " << Bqp_matrix.cols() << std::endl;
     }
 
     /** 
