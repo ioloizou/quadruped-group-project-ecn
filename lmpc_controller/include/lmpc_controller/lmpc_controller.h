@@ -185,6 +185,8 @@ public:
         Q_matrix = Eigen::SparseMatrix<double>(NUM_STATE * HORIZON_LENGTH, NUM_STATE * HORIZON_LENGTH);
         for (int i = 0; i < NUM_STATE * HORIZON_LENGTH; i++)
         {
+            q_weights << 1.0, 1.0, 1.0, 400.0, 400.0, 100.0, 1.0, 1.0, 1.0, 400.0, 400.0, 100.0, 1;
+
             // We insert weights in the diagonal of the matrix but we multiply by 2 
             // because the QP solver expects a 0.5 factor in front of the quadratic term
             Q_matrix.insert(i, i) = 2 * q_weights(i % NUM_STATE);
@@ -578,20 +580,28 @@ public:
         //Instantiate the solver
         OsqpEigen::Solver solver;
 
+        auto t0 = std::chrono::high_resolution_clock::now();
         //Configure the solver
-        solver.settings()->setVerbosity(false);
-        solver.settings()->setWarmStart(true);
-        solver.data()->setNumberOfVariables(NUM_DOF*HORIZON_LENGTH);
-        solver.data()->setNumberOfConstraints(NUM_BOUNDS*LEGS*HORIZON_LENGTH);
-        solver.data()->setLinearConstraintsMatrix(Ac_matrix);
-        solver.data()->setHessianMatrix(hessian);
-        solver.data()->setGradient(gradient);
-        solver.data()->setLowerBound(lower_bounds_horizon);
-        solver.data()->setUpperBound(upper_bounds_horizon);
+        if (!solver.isInitialized()){
+            solver.settings()->setVerbosity(false);
+            solver.settings()->setWarmStart(true);
+            solver.data()->setNumberOfVariables(NUM_DOF*HORIZON_LENGTH);
+            solver.data()->setNumberOfConstraints(NUM_BOUNDS*LEGS*HORIZON_LENGTH);
+            solver.data()->setLinearConstraintsMatrix(Ac_matrix);
+            solver.data()->setHessianMatrix(hessian);
+            solver.data()->setGradient(gradient);
+            solver.data()->setLowerBound(lower_bounds_horizon);
+            solver.data()->setUpperBound(upper_bounds_horizon);
+            solver.initSolver();
+            }
+        else{
+            solver.updateGradient(gradient);
+            solver.updateHessianMatrix(hessian);
+            solver.updateBounds(lower_bounds_horizon, upper_bounds_horizon);
+            }
 
         //Init and solve keeping track of time at each step
-        auto t0 = std::chrono::high_resolution_clock::now();
-        solver.initSolver();
+    
         auto t1 = std::chrono::high_resolution_clock::now();
         solver.solveProblem();
         auto t2 = std::chrono::high_resolution_clock::now();
@@ -666,8 +676,8 @@ public:
 
     bool is_first_run = true;  //to be set to false after first iteration, so that the initial guess is correctly set to hot-start the solver
 
-    Eigen::VectorXd q_weights = Eigen::VectorXd::Ones(NUM_STATE);
-    Eigen::VectorXd r_weights = Eigen::VectorXd::Ones(NUM_DOF);
+    Eigen::VectorXd q_weights = Eigen::VectorXd(NUM_STATE);
+    Eigen::VectorXd r_weights = Eigen::VectorXd::Ones(NUM_DOF)*0.001;
 };
 
 #endif //LMPC_CONTROLLER_H
