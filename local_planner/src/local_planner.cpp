@@ -662,7 +662,7 @@ void LocalPlanner::publishLocalPlan() {
 void LocalPlanner::spin() {
   ros::Rate r(update_rate_);
   int counter = 0;
-  while (ros::ok() && counter < 20) {
+  while (ros::ok() ){//&& counter < 200) {
     ros::spinOnce();
     
     // Wait until all required data has been received
@@ -676,7 +676,7 @@ void LocalPlanner::spin() {
     // Compute the local plan and publish if it solved successfully, otherwise
     // just sleep
     if (computeLocalPlan()) publishLocalPlan();
-    counter += 1;
+    //counter += 1;
     r.sleep();
   }
 }

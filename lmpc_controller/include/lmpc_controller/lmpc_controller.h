@@ -164,14 +164,15 @@ public:
     Eigen::Matrix3d setRotationMatrix(double average_yaw){
         double psi = average_yaw;
 
-        Eigen::Matrix3d Rotation_z;
+        //Eigen::Matrix3d Rotation_z;
         
         // Rotation matrix around the z-axis
         Rotation_z << cos(psi), -sin(psi), 0,
                       sin(psi), cos(psi), 0,
                       0, 0, 1;
         
-        return Rotation_z;
+        
+        return Rotation_z.transpose();
     }
 
     /**
@@ -471,10 +472,10 @@ public:
             for (int i=0; i<LEGS; i++)
             {
             lower_bounds.segment<5>(i*NUM_BOUNDS) << 0,                                         //  0        <= fx + mu*fz
-                                                     -std::numeric_limits<double>::infinity(),  // -infinity <= fx - mu*fz
+                                                    -std::numeric_limits<double>::infinity(),  // -infinity <= fx - mu*fz
                                                      0,                                         //  0        <= fy + mu*fz
-                                                     -std::numeric_limits<double>::infinity(),  // -infinity <= fy - mu*fz
-                                                     fz_min*contact[horizon_step][i];           //  fz_min   <= fz          fz_min*contact = 0 or 1 depending on the contact
+                                                    -std::numeric_limits<double>::infinity(),  // -infinity <= fy - mu*fz
+                                                    fz_min*contact[horizon_step][i];           //  fz_min   <= fz          fz_min*contact = 0 or 1 depending on the contact
                                                      
             upper_bounds.segment<5>(i*NUM_BOUNDS) << std::numeric_limits<double>::infinity(),   //  fx + mu*fz <= infinity
                                                      0,                                         //  fx - mu*fz <= 0
@@ -488,11 +489,11 @@ public:
             horizon_step += 1;
         }
         
-        std::cout<<"Lower bounds: \n"<<lower_bounds_horizon<<std::endl;
-        std::cout<<"Upper bounds: \n"<<upper_bounds_horizon<<std::endl;
+        // std::cout<<"Lower bounds: \n"<<lower_bounds_horizon<<std::endl;
+        // std::cout<<"Upper bounds: \n"<<upper_bounds_horizon<<std::endl;
 
-        std::cout << "lower_bounds_horizon Shape: " << lower_bounds_horizon.rows() << " x " << lower_bounds_horizon.cols() << std::endl;
-        std::cout << "upper_bounds_horizon Shape: " << upper_bounds_horizon.rows() << " x " << upper_bounds_horizon.cols() << std::endl;
+        // std::cout << "lower_bounds_horizon Shape: " << lower_bounds_horizon.rows() << " x " << lower_bounds_horizon.cols() << std::endl;
+        // std::cout << "upper_bounds_horizon Shape: " << upper_bounds_horizon.rows() << " x " << upper_bounds_horizon.cols() << std::endl;
     }
 
     /**
@@ -505,7 +506,7 @@ public:
      * @returns = none
     */
     void setHessian(){   
-        hessian = Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix;
+        hessian = 2 * Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix;
     
         // std::cout << "Hessian: \n" << hessian << std::endl;
         // std::cout << "Shape: " << hessian.rows() << " x " << hessian.cols() << std::endl;
@@ -527,17 +528,22 @@ public:
         
         //Manipulate the inputs to satisfy our QP Implementation
         states.segment(0,12) = current_state_;
-        states_reference = ref_body_plan_.row(0).transpose();
+        // states_reference = ref_body_plan_.row(0).transpose();
+
+        Eigen::VectorXd states_ref_stacked = Eigen::VectorXd::Zero(NUM_STATE * HORIZON_LENGTH);
+        for (int i = 0; i < HORIZON_LENGTH; i++){
+            states_ref_stacked.segment(i*NUM_STATE, 1) = ref_body_plan_.row(i).transpose();
+        }
         
         //Populate the U_vector with the values in grf_plan_:
         for(int i = 0; i < HORIZON_LENGTH; i++){
             U_vector.segment(i*NUM_DOF, 1) = grf_plan_.row(i).transpose();
         }
         
-        auto temp = hessian * U_vector;
-        gradient = temp + 2*Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix * (states - states_reference));
+        // auto temp = hessian * U_vector;
+        // gradient = temp + 2*Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix * (states - states_reference));
 
-        // gradient = Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix *states) - states_reference;
+        gradient = Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix *states) - states_ref_stacked;
 
 
         //std::cout << "Gradient: \n" << gradient << std::endl;
@@ -557,6 +563,8 @@ public:
     */    
     void setInitialGuess(){
         Eigen::VectorXd initial_guess = Eigen::VectorXd::Zero(NUM_STATE-1);
+        // Eigen::VectorXd initial_guess(12,1);
+        // initial_guess << 0, 0, 10, 0, 0, 10, 0, 0, 10, 0, 0, 10;
         // if (is_first_run == false){
         //     //Retrieve the last minimizer correctly, for now it is a random vector
         //     //Goal is to have: initial_guess = last_minimizer
@@ -571,7 +579,7 @@ public:
         OsqpEigen::Solver solver;
 
         //Configure the solver
-        solver.settings()->setVerbosity(true);
+        solver.settings()->setVerbosity(false);
         solver.settings()->setWarmStart(true);
         solver.data()->setNumberOfVariables(NUM_DOF*HORIZON_LENGTH);
         solver.data()->setNumberOfConstraints(NUM_BOUNDS*LEGS*HORIZON_LENGTH);
@@ -596,8 +604,14 @@ public:
 
         //print results
         Eigen::VectorXd result = solver.getSolution();
+
+        // Rotate result grfs to the world frame
+        result.segment<3>(0) = Rotation_z.transpose() * result.segment(0, 3);
         // std::cout << "Result Shape: " << result.rows() << " x " << result.cols() << std::endl;
-        std::cout << "Result: \n" << result.head(12) << std::endl;
+        std::cout << "Result: " << result.head(12).transpose() << std::endl;
+
+
+
         return result;
     }
 
@@ -644,6 +658,8 @@ public:
     
     Eigen::Matrix<double, NUM_DOF * HORIZON_LENGTH, 1> gradient;
     Eigen::SparseMatrix<double> hessian;
+
+    Eigen::Matrix<double, 3, 3> Rotation_z;
 
     //Eigen::Matrix<double, 3, LEGS> foot_positions;  
 
