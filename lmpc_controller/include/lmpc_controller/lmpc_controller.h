@@ -327,8 +327,8 @@ public:
                 }
             }
         }
-        std::cout << "Bqp_matrix: \n" << Bqp_matrix << std::endl;
-        std::cout << "Bqp_matrix Shape: " << Bqp_matrix.rows() << " x " << Bqp_matrix.cols() << std::endl;
+        // std::cout << "Bqp_matrix: \n" << Bqp_matrix << std::endl;
+        // std::cout << "Bqp_matrix Shape: " << Bqp_matrix.rows() << " x " << Bqp_matrix.cols() << std::endl;
     }
 
     /** 
@@ -393,8 +393,8 @@ public:
         Ac_matrix.setFromTriplets(tripletList.begin(), tripletList.end());
         Ac_matrix.makeCompressed();
         
-        // //std::cout << "Ac_matrix: \n" << Ac_matrix << std::endl;
-        // std::cout << "Ac_matrix Shape: " << Ac_matrix.rows() << " x " << Ac_matrix.cols() << std::endl;
+        //std::cout << "Ac_matrix: \n" << Ac_matrix << std::endl;
+        std::cout << "Ac_matrix Shape: " << Ac_matrix.rows() << " x " << Ac_matrix.cols() << std::endl;
     }
 
     /**

@@ -84,7 +84,7 @@ LocalPlanner::LocalPlanner(ros::NodeHandle nh)
   }
 
   // Flag to use linear or nonlinear
-  is_linear_ = false;
+  is_linear_ = true;
 
   // Initialize body and footstep planners
   initLocalFootstepPlanner();
