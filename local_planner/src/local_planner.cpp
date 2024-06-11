@@ -515,7 +515,7 @@ bool LocalPlanner::computeLocalPlan() {
   // Case, either use nonlinear or linear
   if (is_linear_){
     //OUR STUFF
-    ROS_INFO("Entering Linear MPC");
+    // ROS_INFO("Entering Linear MPC");
     local_body_planner_linear_ -> initMatricesZero();
     // ROS_INFO("Matrices initialized");
     local_body_planner_linear_ ->setQMatrix();
@@ -544,6 +544,7 @@ bool LocalPlanner::computeLocalPlan() {
     // ROS_INFO("Bounds set");
     local_body_planner_linear_->setHessian();
     // ROS_INFO("Hessian set");
+    local_body_planner_linear_->changeStatesOrder(current_full_state, ref_body_plan_);
     local_body_planner_linear_->setGradient(grf_plan_, current_state_, ref_body_plan_);
     // ROS_INFO("Gradient set");
     local_body_planner_linear_->setInitialGuess();
@@ -552,7 +553,7 @@ bool LocalPlanner::computeLocalPlan() {
     for (int i = 0; i < N_; i++) {
       grf_plan_.row(i) = result.segment(12 * i, 12).transpose();
     }
-    ROS_INFO("Linear MPC solved");
+    // ROS_INFO("Linear MPC solved");
   }else{
   // Compute leg plan with MPC, return if solve fails
     if (!local_body_planner_nonlinear_->computeLegPlan(
@@ -614,7 +615,9 @@ void LocalPlanner::publishLocalPlan() {
 
     // Add the GRF information
     // std::cout<<grf_plan_<<std::endl; // To see the grf plan
+    // std::cout<<"GRF plan"<<std::endl;
     // std::cout<<"-----------------------------------------------"<<std::endl;
+
     quad_msgs::GRFArray grf_array_msg;
     quad_utils::eigenToGRFArrayMsg(grf_plan_.row(i), foot_plan_msg.states[i],
                                    grf_array_msg);
@@ -658,10 +661,10 @@ void LocalPlanner::publishLocalPlan() {
 
 void LocalPlanner::spin() {
   ros::Rate r(update_rate_);
-
-  while (ros::ok()) {
+  int counter = 0;
+  while (ros::ok() && counter < 20) {
     ros::spinOnce();
-
+    
     // Wait until all required data has been received
     if (terrain_.isEmpty() || (body_plan_msg_ == NULL && !use_twist_input_) ||
         robot_state_msg_ == NULL)
@@ -673,7 +676,7 @@ void LocalPlanner::spin() {
     // Compute the local plan and publish if it solved successfully, otherwise
     // just sleep
     if (computeLocalPlan()) publishLocalPlan();
-
+    counter += 1;
     r.sleep();
   }
 }
