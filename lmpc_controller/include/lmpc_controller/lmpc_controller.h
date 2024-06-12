@@ -16,7 +16,7 @@
 //Constants - Declared here because inside the class does not work
 
 //g = acceleration of gravity [m/s^2]
-const double g = 9.81;
+const double g = -9.81;
 
 /**
  * NUM_STATE = dimension of state vector (X, Y, Z, Vx, Vy, Vz, θx, θy, θz wx, wy, wz, g)
@@ -565,14 +565,6 @@ public:
     */    
     void setInitialGuess(){
         Eigen::VectorXd initial_guess = Eigen::VectorXd::Zero(NUM_STATE-1);
-        // Eigen::VectorXd initial_guess(12,1);
-        // initial_guess << 0, 0, 10, 0, 0, 10, 0, 0, 10, 0, 0, 10;
-        // if (is_first_run == false){
-        //     //Retrieve the last minimizer correctly, for now it is a random vector
-        //     //Goal is to have: initial_guess = last_minimizer
-        //     initial_guess.setRandom();
-        // }
-
         //std::cout << "Initial Guess: \n" << initial_guess << std::endl;
     }
 
@@ -617,14 +609,13 @@ public:
 
         // Rotate result grfs to the world frame
         for (int i = 0; i< 3*LEGS*HORIZON_LENGTH; i+=3){
-            Eigen::Vector3d grf = result.segment(i, 3);
-            result.segment(i, 3) = Rotation_z * grf;
+            Eigen::Vector3d grf = result.segment(i, 3); //extract a grf vector
+            result.segment(i, 3) = Rotation_z * grf;    //rotate the grf vector
         }
         // std::cout << "Result Shape: " << result.rows() << " x " << result.cols() << std::endl;
+        result.segment(0, 12) << 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0; 
         std::cout << "Result: " << result.head(12).transpose() << std::endl;
-
-
-
+        std::cout << "Rotation Matrix: \n" << Rotation_z << std::endl;  
         return result;
     }
 
