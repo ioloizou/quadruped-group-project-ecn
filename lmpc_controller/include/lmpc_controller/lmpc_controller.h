@@ -616,7 +616,10 @@ public:
         Eigen::VectorXd result = solver.getSolution();
 
         // Rotate result grfs to the world frame
-        result.segment<3>(0) = Rotation_z.transpose() * result.segment(0, 3);
+        for (int i = 0; i< 3*LEGS*HORIZON_LENGTH; i+=3){
+            Eigen::Vector3d grf = result.segment(i, 3);
+            result.segment(i, 3) = Rotation_z * grf;
+        }
         // std::cout << "Result Shape: " << result.rows() << " x " << result.cols() << std::endl;
         std::cout << "Result: " << result.head(12).transpose() << std::endl;
 
