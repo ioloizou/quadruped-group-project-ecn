@@ -16,7 +16,7 @@
 //Constants - Declared here because inside the class does not work
 
 //g = acceleration of gravity [m/s^2]
-const double g = 9.81;
+const double g = -9.81;
 
 /**
  * NUM_STATE = dimension of state vector (X, Y, Z, Vx, Vy, Vz, θx, θy, θz wx, wy, wz, g)
@@ -50,7 +50,7 @@ const Eigen::Matrix3d A1_INERTIA_BODY = (Eigen::Matrix3d() <<
                                            0.0158533, -3.66 * std::pow(10, -5), -6.11 * std::pow(10, -5), 
                                            -3.66 * std::pow(10, -5), 0.0377999, -2.75 * std::pow(10, -5),
                                            -6.11 * std::pow(10, -5), -2.75 * std::pow(10, -5), 0.0456542).finished();
-const double ROBOT_MASS = 6;
+const double ROBOT_MASS = 13.6;
 
 
 /**
@@ -128,31 +128,34 @@ public:
     // A function that change the order of states like that 
     // Quad = [x y z vx vy vz theta_x theta_y theta_z wx wy wz g]
     // A1 = [theta_x theta_y theta_z x y z wx wy wz vx vy vz g]
-    void changeStatesOrder(Eigen::VectorXd &current_state_, Eigen::MatrixXd &states_reference_){ 
-        if (current_state_.size() == 12) {
-            Eigen::VectorXd temp = current_state_;
-            current_state_.segment(0, 3) = temp.segment(3, 3);
-            current_state_.segment(3, 3) = temp.segment(0, 3);
-            current_state_.segment(6, 3) = temp.segment(9, 3);
-            current_state_.segment(9, 3) = temp.segment(6, 3);
-            current_state_.segment(12, 1) = temp.segment(12, 1);
-        } else {
-            Eigen::MatrixXd temp = states_reference_;
-            Eigen::VectorXd temp1(NUM_STATE);
-            for (int i=0; i<HORIZON_LENGTH; i++){
-                temp1 = states_reference_.row(i);
-                states_reference_.row(i).segment(0, 3) = temp1.segment(6, 3); //old theta x,y,z go to positions 0, 1 ,2
-                states_reference_.row(i).segment(3, 3) = temp1.segment(0, 3); //old x y z go to positions 3, 4, 5
-                states_reference_.row(i).segment(6, 3) = temp1.segment(9, 3); //old omegas xyz go to positions 6, 7 ,8
-                states_reference_.row(i).segment(9, 3) = temp1.segment(3, 3); //old vx vy vz go to positions 9, 10, 11
+    void changeStatesOrder(Eigen::VectorXd &current_state_, Eigen::MatrixXd &states_reference_)
+    { 
+        changeCurrentStateOrder(current_state_);
+        changeRefStateOrder(states_reference_);
+    }
 
-                // states_reference_.block<1, 3>(i*12, 3) = temp.segment(i*12+3, 3);
-                // states_reference_.block<1, 3>(i*12+3, 3) = temp.segment(i*12, 3);
-                // states_reference_.block<1, 3>(i*12+6, 3) = temp.segment(i*12+9, 3);
-                // states_reference_.block<1, 3>(i*12+9, 3) = temp.segment(i*12+6, 3);
-                // states_reference_.block<1, 3>(i*12+12, 1) = temp.segment(i*12+12, 1);
-            }      
-        }
+    void changeCurrentStateOrder(Eigen::VectorXd &current_state_)
+    {
+        Eigen::VectorXd temp_current_state = current_state_;
+        current_state_.segment(0, 3) = temp_current_state.segment(3, 3);
+        current_state_.segment(3, 3) = temp_current_state.segment(0, 3);
+        current_state_.segment(6, 3) = temp_current_state.segment(9, 3);
+        current_state_.segment(9, 3) = temp_current_state.segment(6, 3);
+        current_state_(12, 1) = g;
+    }
+
+    void changeRefStateOrder(Eigen::MatrixXd &states_reference_)
+    {
+        Eigen::VectorXd temp_states_reference(NUM_STATE);
+
+        for (int i=0; i<HORIZON_LENGTH; i++){
+            temp_states_reference = states_reference_.row(i);
+            states_reference_.row(i).segment(0, 3) = temp_states_reference.segment(6, 3); //old theta x,y,z go to positions 0, 1 ,2
+            states_reference_.row(i).segment(3, 3) = temp_states_reference.segment(0, 3); //old x y z go to positions 3, 4, 5
+            states_reference_.row(i).segment(6, 3) = temp_states_reference.segment(9, 3); //old omegas xyz go to positions 6, 7 ,8
+            states_reference_.row(i).segment(9, 3) = temp_states_reference.segment(3, 3); //old vx vy vz go to positions 9, 10, 11
+            states_reference_.row(i)(12, 1) = g;
+        }      
     }
 
     /**
@@ -446,7 +449,7 @@ public:
         Ac_matrix.makeCompressed();
         
         //std::cout << "Ac_matrix: \n" << Ac_matrix << std::endl;
-        std::cout << "Ac_matrix Shape: " << Ac_matrix.rows() << " x " << Ac_matrix.cols() << std::endl;
+        // std::cout << "Ac_matrix Shape: " << Ac_matrix.rows() << " x " << Ac_matrix.cols() << std::endl;
     }
 
     /**
@@ -484,6 +487,17 @@ public:
                                                      std::numeric_limits<double>::infinity(),   //  fy + mu*fz <= infinity
                                                      0,                                         //  fy - mu*fz <= 0
                                                      fz_max*contact[horizon_step][i];           //  fz <= fz_max            fz_max*contact = 0 or 1 depending on the contact
+            // lower_bounds.segment<5>(i*NUM_BOUNDS) << 0,                                         //  0        <= fx + mu*fz
+            //                                         -std::numeric_limits<double>::infinity(),  // -infinity <= fx - mu*fz
+            //                                          0,                                         //  0        <= fy + mu*fz
+            //                                         -std::numeric_limits<double>::infinity(),  // -infinity <= fy - mu*fz
+            //                                         -std::numeric_limits<double>::infinity();           //  fz_min   <= fz          fz_min*contact = 0 or 1 depending on the contact
+                                                     
+            // upper_bounds.segment<5>(i*NUM_BOUNDS) << std::numeric_limits<double>::infinity(),   //  fx + mu*fz <= infinity
+            //                                          0,                                         //  fx - mu*fz <= 0
+            //                                          std::numeric_limits<double>::infinity(),   //  fy + mu*fz <= infinity
+            //                                          0,                                         //  fy - mu*fz <= 0
+            //                                          std::numeric_limits<double>::infinity();           //  fz <= fz_max            fz_max*contact = 0 or 1 depending on the contact
             }
 
             lower_bounds_horizon.segment<NUM_BOUNDS * LEGS>(horizon_step*NUM_BOUNDS*LEGS) = lower_bounds;
@@ -525,7 +539,11 @@ public:
      * 
      * @returns = none
     */
-    void setGradient(Eigen::VectorXd grf_plan_, Eigen::VectorXd current_state_, Eigen::VectorXd ref_body_plan_){
+    void setGradient(Eigen::MatrixXd grf_plan_, Eigen::VectorXd current_state_, Eigen::MatrixXd ref_body_plan_){
+        // Change the order of the states to match the order of our QP formulation
+        changeStatesOrder(current_state_, ref_body_plan_);
+        
+        
         gradient.resize(NUM_DOF * HORIZON_LENGTH, 1);
         
         //Manipulate the inputs to satisfy our QP Implementation
@@ -575,6 +593,71 @@ public:
 
         //std::cout << "Initial Guess: \n" << initial_guess << std::endl;
     }
+
+
+    /**
+     * @brief This function computes the rollout of the MPC controller
+     * 
+     * @param[in] = u - The vector of control inputs
+     * 
+     * @param[out] = The rollout of the controller (the predicted states)
+     * 
+     * @param[in] = current_state - The current state of the robot
+     * 
+     * @returns = None
+    */
+    void computeRollout(Eigen::VectorXd &u, Eigen::MatrixXd &x, Eigen::VectorXd current_state)
+    {
+        x.row(0) = current_state.transpose();
+
+        // Change state order
+        changeCurrentStateOrder(current_state);
+
+        // std::cout << "Size of body plan " << x.rows() << "  " << x.cols() << std::endl;
+
+        Eigen::VectorXd x_next = current_state;
+        for (int i = 1; i < HORIZON_LENGTH; i++)
+        {
+            // std::cout << i << std::endl;
+            // std::cout << "Size of u " << u.rows() << "  " << u.cols() << std::endl;
+            // std::cout << "Size of B " << B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0).rows() << "  " << B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0).cols() << std::endl;
+            // std::cout << "Size of u seg " << u.segment((i-1) * NUM_DOF, NUM_DOF).rows() << "  " << u.segment((i-1) * NUM_DOF, NUM_DOF).cols() << std::endl;
+
+            x_next = A_matrix_discrete * x_next + B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0) * u.segment((i-1) * NUM_DOF, NUM_DOF);
+            // std::cout << "Size of x_next " << x_next.rows() << "  " << x_next.cols() << std::endl;
+            // Revert state back to original order
+            changeCurrentStateOrder(x_next);
+            x.row(i) = x_next.segment(0, NUM_STATE-1).transpose();
+        }
+        std::cout << x << std::endl << std::endl;
+    }
+
+    void computeRollout(Eigen::MatrixXd &u, Eigen::MatrixXd &x, Eigen::VectorXd current_state)
+    {
+        x.row(0) = current_state.transpose();
+
+        // Change state order
+        changeCurrentStateOrder(current_state);
+
+        // std::cout << "Size of body plan " << x.rows() << "  " << x.cols() << std::endl;
+
+        Eigen::VectorXd x_next = current_state;
+        for (int i = 1; i < HORIZON_LENGTH; i++)
+        {
+            // std::cout << i << std::endl;
+            // std::cout << "Size of u " << u.rows() << "  " << u.cols() << std::endl;
+            // std::cout << "Size of B " << B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0).rows() << "  " << B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0).cols() << std::endl;
+            // std::cout << "Size of u seg " << u.segment((i-1) * NUM_DOF, NUM_DOF).rows() << "  " << u.segment((i-1) * NUM_DOF, NUM_DOF).cols() << std::endl;
+
+            x_next = A_matrix_discrete * x_next + B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0) * u.row(i-1).transpose();
+            // std::cout << "Size of x_next " << x_next.rows() << "  " << x_next.cols() << std::endl;
+            // Revert state back to original order
+            changeCurrentStateOrder(x_next);
+            x.row(i) = x_next.segment(0, NUM_STATE-1).transpose();
+        }
+        std::cout << x << std::endl << std::endl;
+    }
+
 
     Eigen::VectorXd solveQP(){
         //Instantiate the solver
