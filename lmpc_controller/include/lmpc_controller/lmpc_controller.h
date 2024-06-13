@@ -188,7 +188,7 @@ public:
         Q_matrix = Eigen::SparseMatrix<double>(NUM_STATE * HORIZON_LENGTH, NUM_STATE * HORIZON_LENGTH);
         for (int i = 0; i < NUM_STATE * HORIZON_LENGTH; i++)
         {
-            q_weights << 1.0, 1.0, 1.0, 400.0, 400.0, 100.0, 1.0, 1.0, 1.0, 400.0, 400.0, 100.0, 1;
+            q_weights << 20.0, 10.0, 1.0, 0.0, 0.0, 420.0, 0.05, 0.05, 0.05, 30.0, 30.0, 10.0, 0;
 
             // We insert weights in the diagonal of the matrix but we multiply by 2 
             // because the QP solver expects a 0.5 factor in front of the quadratic term
@@ -754,7 +754,7 @@ public:
     bool is_first_run = true;  //to be set to false after first iteration, so that the initial guess is correctly set to hot-start the solver
 
     Eigen::VectorXd q_weights = Eigen::VectorXd(NUM_STATE);
-    Eigen::VectorXd r_weights = Eigen::VectorXd::Ones(NUM_DOF)*0.001;
+    Eigen::VectorXd r_weights = Eigen::VectorXd::Ones(NUM_DOF)*0.00000001;
 };
 
 #endif //LMPC_CONTROLLER_H
