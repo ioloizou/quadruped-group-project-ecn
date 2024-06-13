@@ -684,21 +684,22 @@ public:
         //Process and print time intervals of the solver
         std::chrono::duration<double, std::milli> init_duration = t1 - t0;
         std::chrono::duration<double, std::milli> solve_duration = t2 - t1;
-        std::cout << "Solver init time: " << init_duration.count() << "ms" << std::endl; 
-        std::cout << "Solve time: " << solve_duration.count() << "ms" << std::endl;
+        // std::cout << "Solver init time: " << init_duration.count() << "ms" << std::endl; 
+        // std::cout << "Solve time: " << solve_duration.count() << "ms" << std::endl;
 
         //print results
         Eigen::VectorXd result = solver.getSolution();
 
         // Rotate result grfs to the world frame
-        for (int i = 0; i< 3*LEGS*HORIZON_LENGTH; i+=3){
-            Eigen::Vector3d grf = result.segment(i, 3); //extract a grf vector
-            result.segment(i, 3) = Rotation_z * grf;    //rotate the grf vector
-        }
+        // for (int i = 0; i< 3*LEGS*HORIZON_LENGTH; i+=3){
+        //     Eigen::Vector3d grf = result.segment(i, 3); //extract a grf vector
+        //     result.segment(i, 3) = Rotation_z * grf;    //rotate the grf vector
+        // }
         // std::cout << "Result Shape: " << result.rows() << " x " << result.cols() << std::endl;
-        result.segment(0, 12) << 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0; 
-        std::cout << "Result: " << result.head(12).transpose() << std::endl;
-        std::cout << "Rotation Matrix: \n" << Rotation_z << std::endl;  
+        // result.segment(0, 12) << 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0; 
+        // std::cout << "---------------------------------------------------------" << std::endl;
+        // std::cout << "Result: " << result.head(12).transpose() << std::endl;
+        // std::cout << "Rotation Matrix: \n" << Rotation_z << std::endl;  
         return result;
     }
 
