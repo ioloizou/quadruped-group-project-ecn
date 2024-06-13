@@ -550,9 +550,17 @@ bool LocalPlanner::computeLocalPlan() {
     local_body_planner_linear_->setInitialGuess();
     // ROS_INFO("Initial guess set");
     auto result = local_body_planner_linear_->solveQP();
+
+    // local_body_planner_linear_->computeRollout(result, ref_body_plan_, current_state_);
     for (int i = 0; i < N_; i++) {
       grf_plan_.row(i) = result.segment(12 * i, 12).transpose();
     }
+
+    //Constant GRFs:
+    for (int i = 0; i < num_feet_; i++) {
+      grf_plan_.col(3 * i + 2).fill(13.3 * 9.81 / num_feet_);
+    }
+    local_body_planner_linear_->computeRollout(grf_plan_, ref_body_plan_, current_state_);
     // ROS_INFO("Linear MPC solved");
   }else{
   // Compute leg plan with MPC, return if solve fails

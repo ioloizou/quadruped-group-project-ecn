@@ -269,28 +269,33 @@ public:
      * @returns = None
     */
     void setBMatrixContinuous(Eigen::MatrixXd foot_positions, Eigen::Matrix3d Rotation_z){
-        // std::cout << "foot positions: \n" << foot_positions << std::endl;
-        
+       
         Eigen::Matrix3d A1_INERTIA_WORLD;
         A1_INERTIA_WORLD = Rotation_z * A1_INERTIA_BODY * Rotation_z.transpose();
+        
         for (int i = 0; i < HORIZON_LENGTH; i++)
-        {    
+        {                
             for (int j=0; j<LEGS; j++)
-            {        
-                // Using the paper B matrix as reference
-                Eigen::Vector3d r = foot_positions.row(i);
-                Eigen::Matrix3d skew_symmetric_foot_position;
-                
-                vectorToSkewSymmetric(r, skew_symmetric_foot_position);
-                
-                B_matrix_continuous.block<3, 3>(6, 3*j) = A1_INERTIA_WORLD.inverse() * skew_symmetric_foot_position;
+            {
+                //Extract foot position vector in the given horizon step
+                Eigen::Vector3d r_leg = foot_positions.row(i).segment(3*j, 3);
+                //Declare and load the skew symmetric matrix of the foot position vector
+                Eigen::Matrix3d r_leg_skew;
+                vectorToSkewSymmetric(r_leg, r_leg_skew);
+
+                //Load the B matrix with the skew symmetric matrix of foot position multiplied by inertia and 1/mass
+                B_matrix_continuous.block<3, 3>(6, 3*j) = A1_INERTIA_WORLD.inverse() * r_leg_skew;
                 B_matrix_continuous.block<3, 3>(9, 3*j) = Eigen::Matrix3d::Identity() * (1/ROBOT_MASS);
 
-                B_matrix_continuous_list.block<NUM_STATE, NUM_DOF>(i*HORIZON_LENGTH, 0) = B_matrix_continuous;
+                B_matrix_continuous_list.block<NUM_STATE, NUM_DOF>(i*NUM_STATE, 0) = B_matrix_continuous;
             }
+            
         }
         // std::cout << "B_matrix_continuous: \n" << B_matrix_continuous << std::endl;
         // std::cout << "B_matrix_continuous Shape: \n" << B_matrix_continuous.rows() << " x " << B_matrix_continuous.cols() << std::endl;
+
+        // std::cout << "B_matrix_continuous_list: \n" << B_matrix_continuous_list << std::endl;
+        // std::cout << "B_matrix_continuous_list Shape: \n" << B_matrix_continuous_list.rows() << " x " << B_matrix_continuous_list.cols() << std::endl;
 
     }
 
@@ -317,6 +322,9 @@ public:
         
         // std::cout << "B_matrix_discrete: \n" << B_matrix_discrete << std::endl;
         // std::cout << "B_matrix_discrete Shape: \n" << B_matrix_discrete.rows() << " x " << B_matrix_discrete.cols() << std::endl;
+
+        // std::cout << "B_matrix_discrete_list: \n" << B_matrix_discrete_list << std::endl;
+        // std::cout << "B_matrix_discrete_list Shape: \n" << B_matrix_discrete_list.rows() << " x " << B_matrix_discrete_list.cols() << std::endl;
     }
 
     /**
@@ -522,8 +530,8 @@ public:
      * @returns = none
     */
     void setHessian(){   
-        hessian = 2 * Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix;
-    
+        // hessian = 2 * Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix;
+        hessian = Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix;
         // std::cout << "Hessian: \n" << hessian << std::endl;
         // std::cout << "Shape: " << hessian.rows() << " x " << hessian.cols() << std::endl;
 
@@ -555,15 +563,15 @@ public:
             states_ref_stacked.segment(i*NUM_STATE, 1) = ref_body_plan_.row(i).transpose();
         }
         
-        //Populate the U_vector with the values in grf_plan_:
-        for(int i = 0; i < HORIZON_LENGTH; i++){
-            U_vector.segment(i*NUM_DOF, 1) = grf_plan_.row(i).transpose();
-        }
+        // //Populate the U_vector with the values in grf_plan_:
+        // for(int i = 0; i < HORIZON_LENGTH; i++){
+        //     U_vector.segment(i*NUM_DOF, 1) = grf_plan_.row(i).transpose();
+        // }
         
         // auto temp = hessian * U_vector;
         // gradient = temp + 2*Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix * (states - states_reference));
 
-        gradient = Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix *states) - states_ref_stacked;
+        gradient = Bqp_matrix.transpose() * Q_matrix * ((Aqp_matrix *states) - states_ref_stacked);
 
 
         //std::cout << "Gradient: \n" << gradient << std::endl;
@@ -610,16 +618,20 @@ public:
         Eigen::VectorXd x_next = current_state;
         for (int i = 1; i < HORIZON_LENGTH; i++)
         {
-            // std::cout << i << std::endl;
-            // std::cout << "Size of u " << u.rows() << "  " << u.cols() << std::endl;
-            // std::cout << "Size of B " << B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0).rows() << "  " << B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0).cols() << std::endl;
-            // std::cout << "Size of u seg " << u.segment((i-1) * NUM_DOF, NUM_DOF).rows() << "  " << u.segment((i-1) * NUM_DOF, NUM_DOF).cols() << std::endl;
+            std::cout <<"CURRENT HORIZON INDEX = " << i << std::endl;
+            std::cout <<" -A MATRIX:\n" << A_matrix_discrete << std::endl << std::endl;
+            std::cout <<" -X_" << i-1 << " = " << x_next.transpose() << std::endl << std::endl;
+            std::cout <<" -CURRENT B MATRIX:\n" << B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0) << std::endl << std::endl;
+            std::cout <<" -CURRENT U VECTOR = " << u.segment((i-1) * NUM_DOF, NUM_DOF).transpose() << std::endl << std::endl;
 
             x_next = A_matrix_discrete * x_next + B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0) * u.segment((i-1) * NUM_DOF, NUM_DOF);
-            // std::cout << "Size of x_next " << x_next.rows() << "  " << x_next.cols() << std::endl;
+
+            std::cout <<" -X_" << i << " = " << x_next.transpose() << std::endl << std::endl;
+            
             // Revert state back to original order
             changeCurrentStateOrder(x_next);
-            x.row(i) = x_next.segment(0, NUM_STATE-1).transpose();
+            x.row(i) = x_next.segment(0, NUM_STATE-1).transpose(); //why?
+            std::cout << "--------------------------------------------------------------------------" << std::endl << std::endl;
         }
         std::cout << x << std::endl << std::endl;
     }
@@ -631,23 +643,25 @@ public:
         // Change state order
         changeCurrentStateOrder(current_state);
 
-        // std::cout << "Size of body plan " << x.rows() << "  " << x.cols() << std::endl;
-
         Eigen::VectorXd x_next = current_state;
         for (int i = 1; i < HORIZON_LENGTH; i++)
         {
-            // std::cout << i << std::endl;
-            // std::cout << "Size of u " << u.rows() << "  " << u.cols() << std::endl;
-            // std::cout << "Size of B " << B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0).rows() << "  " << B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0).cols() << std::endl;
-            // std::cout << "Size of u seg " << u.segment((i-1) * NUM_DOF, NUM_DOF).rows() << "  " << u.segment((i-1) * NUM_DOF, NUM_DOF).cols() << std::endl;
-
+            // std::cout <<"CURRENT HORIZON INDEX = " << i << std::endl;
+            // std::cout <<" -A MATRIX:\n" << A_matrix_discrete << std::endl << std::endl;
+            // std::cout <<" -X_" << i-1 << " = " << x_next.transpose() << std::endl << std::endl;
+            // std::cout <<" -CURRENT B MATRIX:\n" << B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0) << std::endl << std::endl;
+            // std::cout <<" -CURRENT U VECTOR = " << u.row(i-1) << std::endl << std::endl;
+          
             x_next = A_matrix_discrete * x_next + B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0) * u.row(i-1).transpose();
-            // std::cout << "Size of x_next " << x_next.rows() << "  " << x_next.cols() << std::endl;
+            std::cout <<" -X_" << i << " = " << x_next.transpose() << std::endl << std::endl;
+            
             // Revert state back to original order
             changeCurrentStateOrder(x_next);
             x.row(i) = x_next.segment(0, NUM_STATE-1).transpose();
+
+            std::cout << "--------------------------------------------------------------------------" << std::endl << std::endl;
         }
-        std::cout << x << std::endl << std::endl;
+        std::cout << x << std::endl << std::endl << std::endl;
     }
 
 
@@ -689,6 +703,11 @@ public:
 
         //print results
         Eigen::VectorXd result = solver.getSolution();
+        //scale only the  components by 2:
+        // for (int i=0; i < LEGS; i++){
+        //     result.col(3*i + 2) = result.col(3*i + 2)*2;
+        // }
+        // result = result*2;
 
         // Rotate result grfs to the world frame
         // for (int i = 0; i< 3*LEGS*HORIZON_LENGTH; i+=3){
@@ -698,7 +717,7 @@ public:
         // std::cout << "Result Shape: " << result.rows() << " x " << result.cols() << std::endl;
         // result.segment(0, 12) << 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0; 
         // std::cout << "---------------------------------------------------------" << std::endl;
-        // std::cout << "Result: " << result.head(12).transpose() << std::endl;
+        std::cout << "Result: " << result.head(12).transpose() << std::endl;
         // std::cout << "Rotation Matrix: \n" << Rotation_z << std::endl;  
         return result;
     }
