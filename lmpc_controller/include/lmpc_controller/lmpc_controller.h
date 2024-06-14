@@ -560,16 +560,6 @@ public:
     void setHessian(){   
         // hessian = 2 * (Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix);
         hessian = Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix;
-        double lambda = 1e-3;
-        hessian = hessian + lambda * Eigen::MatrixXd::Identity(hessian.rows(), hessian.cols());
-        Eigen::JacobiSVD<Eigen::MatrixXd> svd(hessian);
-        Eigen::VectorXd singularValues = svd.singularValues();
-        double conditionNumber = singularValues(0) / singularValues(singularValues.size() - 1);
-        std::cout << "Condition number: " << conditionNumber << std::endl;
-        std::cout << "Eigenvalues: " << singularValues(0) << " " << singularValues(singularValues.size()-1) << std::endl;
-        // std::cout << "Hessian: \n" << hessian << std::endl;
-        // std::cout << "Shape: " << hessian.rows() << " x " << hessian.cols() << std::endl;
-
     }
 
     /**
@@ -663,18 +653,17 @@ public:
 
     void computeRollout(Eigen::MatrixXd &u, Eigen::MatrixXd &x, Eigen::VectorXd current_state)
     {
-        x.row(0) = current_state.transpose();
+        x.conservativeResize(HORIZON_LENGTH, NUM_STATE);
 
         // Change state order
         quadToA1ChangeCurrentState(current_state);
+        x.row(0) = current_state.transpose();
 
         Eigen::VectorXd x_next = current_state;
         for (int i = 1; i < HORIZON_LENGTH; i++)
         {          
             x_next = A_matrix_discrete * x_next + B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0) * u.row(i-1).transpose();
             x.row(i) = x_next.transpose();
-            // std::cout << x_next.transpose() << std::endl;
-            // std::cout << x.row(i).transpose() << std::endl << std::endl;
         }
         // Revert state back to original order
         A1ToQuadChangeRefState(x);
@@ -728,7 +717,7 @@ public:
         // Rotate result grfs to the world frame
         // for (int i = 0; i< 3*LEGS*HORIZON_LENGTH; i+=3){
         //     Eigen::Vector3d grf = result.segment(i, 3); //extract a grf vector
-        //     result.segment(i, 3) = Rotation_z.transpose() * grf;    //rotate the grf vector
+        //     result.segment(i, 3) = Rotation_z * grf;    //rotate the grf vector
         // }
         // std::cout << "Result Shape: " << result.rows() << " x " << result.cols() << std::endl;
         // result.segment(0, 12) << 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0; 
