@@ -137,10 +137,10 @@ public:
     void changeCurrentStateOrder(Eigen::VectorXd &current_state_)
     {
         Eigen::VectorXd temp_current_state = current_state_;
-        current_state_.segment(0, 3) = temp_current_state.segment(3, 3);
+        current_state_.segment(0, 3) = temp_current_state.segment(6, 3);
         current_state_.segment(3, 3) = temp_current_state.segment(0, 3);
         current_state_.segment(6, 3) = temp_current_state.segment(9, 3);
-        current_state_.segment(9, 3) = temp_current_state.segment(6, 3);
+        current_state_.segment(9, 3) = temp_current_state.segment(3, 3);
         current_state_(12, 1) = g;
     }
 
@@ -248,8 +248,11 @@ public:
      * 
      * @returns = None
     */
-    void setAMatrixDiscrete(){
-        A_matrix_discrete = Eigen::Matrix<double, NUM_STATE, NUM_STATE>::Identity(NUM_STATE, NUM_STATE) + A_matrix_continuous * dt;
+    void setAMatrixDiscrete(double &first_element_duration){
+        Eigen::MatrixXd A_matrix_continuous_sampled = A_matrix_continuous*dt;
+        A_matrix_continuous_sampled.row(0) = A_matrix_continuous.row(0)*first_element_duration;
+        A_matrix_discrete = Eigen::Matrix<double, NUM_STATE, NUM_STATE>::Identity(NUM_STATE, NUM_STATE) + A_matrix_continuous_sampled;
+        // A_matrix_discrete = Eigen::Matrix<double, NUM_STATE, NUM_STATE>::Identity(NUM_STATE, NUM_STATE) + A_matrix_continuous * dt;
         // std::cout << "A_matrix_discrete: \n" << A_matrix_discrete << std::endl;
         // std::cout << "A_matrix_discrete Shape: \n" << A_matrix_discrete.rows() << " x " << A_matrix_discrete.cols() << std::endl;
         
@@ -287,8 +290,8 @@ public:
                 B_matrix_continuous.block<3, 3>(6, 3*j) = A1_INERTIA_WORLD.inverse() * r_leg_skew;
                 B_matrix_continuous.block<3, 3>(9, 3*j) = Eigen::Matrix3d::Identity() * (1/ROBOT_MASS);
 
-                B_matrix_continuous_list.block<NUM_STATE, NUM_DOF>(i*NUM_STATE, 0) = B_matrix_continuous;
             }
+            B_matrix_continuous_list.block<NUM_STATE, NUM_DOF>(i*NUM_STATE, 0) = B_matrix_continuous;
             
         }
         // std::cout << "B_matrix_continuous: \n" << B_matrix_continuous << std::endl;
@@ -311,12 +314,13 @@ public:
      * 
      * @returns = None
     */
-    void setBMatrixDiscrete(){
+    void setBMatrixDiscrete(double &first_element_duration){
         Eigen::Matrix<double, NUM_STATE, NUM_DOF> current_B;
         for (int i = 0; i < HORIZON_LENGTH; i++)
         {
             current_B = B_matrix_continuous_list.block<NUM_STATE, NUM_DOF>(i*NUM_STATE,0);
             B_matrix_discrete = current_B * dt;
+            B_matrix_discrete.row(0) = current_B.row(0)*first_element_duration;
             B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>(i*NUM_STATE, 0) = B_matrix_discrete;
         }
         
@@ -381,7 +385,7 @@ public:
             for (int j=0; j<= i; j++){
                 if (i - j== 0)
                 {
-                    Bqp_matrix.block<NUM_STATE, NUM_DOF>(i * NUM_STATE, 0) = B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>(j*NUM_STATE, 0);
+                    Bqp_matrix.block<NUM_STATE, NUM_DOF>(i * NUM_STATE, j*NUM_DOF) = B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>(j*NUM_STATE, 0);
                 }
                 else
                 {   // I am not sure about this part
@@ -560,7 +564,7 @@ public:
 
         Eigen::VectorXd states_ref_stacked = Eigen::VectorXd::Zero(NUM_STATE * HORIZON_LENGTH);
         for (int i = 0; i < HORIZON_LENGTH; i++){
-            states_ref_stacked.segment(i*NUM_STATE, 1) = ref_body_plan_.row(i).transpose();
+            states_ref_stacked.segment(i*NUM_STATE, NUM_STATE) = ref_body_plan_.row(i).transpose();
         }
         
         // //Populate the U_vector with the values in grf_plan_:
@@ -618,22 +622,22 @@ public:
         Eigen::VectorXd x_next = current_state;
         for (int i = 1; i < HORIZON_LENGTH; i++)
         {
-            std::cout <<"CURRENT HORIZON INDEX = " << i << std::endl;
-            std::cout <<" -A MATRIX:\n" << A_matrix_discrete << std::endl << std::endl;
-            std::cout <<" -X_" << i-1 << " = " << x_next.transpose() << std::endl << std::endl;
-            std::cout <<" -CURRENT B MATRIX:\n" << B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0) << std::endl << std::endl;
-            std::cout <<" -CURRENT U VECTOR = " << u.segment((i-1) * NUM_DOF, NUM_DOF).transpose() << std::endl << std::endl;
+            // std::cout <<"CURRENT HORIZON INDEX = " << i << std::endl;
+            // std::cout <<" -A MATRIX:\n" << A_matrix_discrete << std::endl << std::endl;
+            // std::cout <<" -X_" << i-1 << " = " << x_next.transpose() << std::endl << std::endl;
+            // std::cout <<" -CURRENT B MATRIX:\n" << B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0) << std::endl << std::endl;
+            // std::cout <<" -CURRENT U VECTOR = " << u.segment((i-1) * NUM_DOF, NUM_DOF).transpose() << std::endl << std::endl;
 
             x_next = A_matrix_discrete * x_next + B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0) * u.segment((i-1) * NUM_DOF, NUM_DOF);
 
-            std::cout <<" -X_" << i << " = " << x_next.transpose() << std::endl << std::endl;
+            // std::cout <<" -X_" << i << " = " << x_next.transpose() << std::endl << std::endl;
             
             // Revert state back to original order
             changeCurrentStateOrder(x_next);
             x.row(i) = x_next.segment(0, NUM_STATE-1).transpose(); //why?
-            std::cout << "--------------------------------------------------------------------------" << std::endl << std::endl;
+            // std::cout << "--------------------------------------------------------------------------" << std::endl << std::endl;
         }
-        std::cout << x << std::endl << std::endl;
+        // std::cout << x << std::endl << std::endl;
     }
 
     void computeRollout(Eigen::MatrixXd &u, Eigen::MatrixXd &x, Eigen::VectorXd current_state)
@@ -653,15 +657,15 @@ public:
             // std::cout <<" -CURRENT U VECTOR = " << u.row(i-1) << std::endl << std::endl;
           
             x_next = A_matrix_discrete * x_next + B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0) * u.row(i-1).transpose();
-            std::cout <<" -X_" << i << " = " << x_next.transpose() << std::endl << std::endl;
+            // std::cout <<" -X_" << i << " = " << x_next.transpose() << std::endl << std::endl;
             
             // Revert state back to original order
             changeCurrentStateOrder(x_next);
             x.row(i) = x_next.segment(0, NUM_STATE-1).transpose();
 
-            std::cout << "--------------------------------------------------------------------------" << std::endl << std::endl;
+            // std::cout << "--------------------------------------------------------------------------" << std::endl << std::endl;
         }
-        std::cout << x << std::endl << std::endl << std::endl;
+        // std::cout << x << std::endl << std::endl << std::endl;
     }
 
 
@@ -717,7 +721,7 @@ public:
         // std::cout << "Result Shape: " << result.rows() << " x " << result.cols() << std::endl;
         // result.segment(0, 12) << 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0; 
         // std::cout << "---------------------------------------------------------" << std::endl;
-        std::cout << "Result: " << result.head(12).transpose() << std::endl;
+        // std::cout << "Result: " << result.head(12).transpose() << std::endl;
         // std::cout << "Rotation Matrix: \n" << Rotation_z << std::endl;  
         return result;
     }
