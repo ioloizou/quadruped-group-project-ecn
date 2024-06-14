@@ -80,16 +80,9 @@ public:
         nh_ = nh;
         robot_id_ = type;
         // Parameters initialization with values from paper
-        mu = 0.6;
+        mu = 0.3;
         fz_min = 10;
         fz_max = 666;        
-        //Initialize variables to zero
-        states = Eigen::VectorXd::Zero(NUM_STATE);
-        states(13) = g;
-        states_reference = Eigen::VectorXd::Zero(NUM_STATE);
-        states_reference(13) = g;
-        U_vector = Eigen::VectorXd::Zero(NUM_DOF*HORIZON_LENGTH);
-        //foot_positions = Eigen::Matrix<double, 3, LEGS>::Zero();
     }
     /**
      * Initializes the A_matrix_continuous and A_matrix_discrete matrices to zero.
@@ -128,34 +121,62 @@ public:
     // A function that change the order of states like that 
     // Quad = [x y z vx vy vz theta_x theta_y theta_z wx wy wz g]
     // A1 = [theta_x theta_y theta_z x y z wx wy wz vx vy vz g]
-    void changeStatesOrder(Eigen::VectorXd &current_state_, Eigen::MatrixXd &states_reference_)
+    void quadToA1ChangeStatesOrder(Eigen::VectorXd &current_state_, Eigen::MatrixXd &states_reference_)
     { 
-        changeCurrentStateOrder(current_state_);
-        changeRefStateOrder(states_reference_);
+        quadToA1ChangeCurrentState(current_state_);
+        quadToA1ChangeRefState(states_reference_);
     }
 
-    void changeCurrentStateOrder(Eigen::VectorXd &current_state_)
+    void quadToA1ChangeCurrentState(Eigen::VectorXd &current_state_)
     {
         Eigen::VectorXd temp_current_state = current_state_;
-        current_state_.segment(0, 3) = temp_current_state.segment(6, 3);
-        current_state_.segment(3, 3) = temp_current_state.segment(0, 3);
-        current_state_.segment(6, 3) = temp_current_state.segment(9, 3);
-        current_state_.segment(9, 3) = temp_current_state.segment(3, 3);
-        current_state_(12, 1) = g;
+        current_state_.conservativeResize(NUM_STATE);
+        current_state_.segment(0, 3) = temp_current_state.segment(3, 3);  // orientation goes to place 1
+        current_state_.segment(3, 3) = temp_current_state.segment(0, 3);  // position goes to place 2
+        current_state_.segment(6, 3) = temp_current_state.segment(9, 3);  // angular velocity goes to place 3
+        current_state_.segment(9, 3) = temp_current_state.segment(6, 3);  // linear velocity goes to place 4
+        current_state_(12) = g;
     }
 
-    void changeRefStateOrder(Eigen::MatrixXd &states_reference_)
+    void quadToA1ChangeRefState(Eigen::MatrixXd &states_reference_)
     {
-        Eigen::VectorXd temp_states_reference(NUM_STATE);
+        Eigen::MatrixXd temp_states_reference = states_reference_;
+        // states_reference_.conservativeResize(HORIZON_LENGTH, NUM_STATE);
+        states_reference_.conservativeResize(HORIZON_LENGTH, NUM_STATE);
+
 
         for (int i=0; i<HORIZON_LENGTH; i++){
-            temp_states_reference = states_reference_.row(i);
-            states_reference_.row(i).segment(0, 3) = temp_states_reference.segment(6, 3); //old theta x,y,z go to positions 0, 1 ,2
-            states_reference_.row(i).segment(3, 3) = temp_states_reference.segment(0, 3); //old x y z go to positions 3, 4, 5
-            states_reference_.row(i).segment(6, 3) = temp_states_reference.segment(9, 3); //old omegas xyz go to positions 6, 7 ,8
-            states_reference_.row(i).segment(9, 3) = temp_states_reference.segment(3, 3); //old vx vy vz go to positions 9, 10, 11
-            states_reference_.row(i)(12, 1) = g;
+            states_reference_.row(i).segment(0, 3) = temp_states_reference.row(i).segment(3, 3);  // orientation goes to place 1
+            states_reference_.row(i).segment(3, 3) = temp_states_reference.row(i).segment(0, 3);  // position goes to place 2
+            states_reference_.row(i).segment(6, 3) = temp_states_reference.row(i).segment(9, 3);  // angular velocity goes to place 3
+            states_reference_.row(i).segment(9, 3) = temp_states_reference.row(i).segment(6, 3);  // linear velocity goes to place 4
+            states_reference_.row(i)(12) = g;
+            // std::cout << states_reference_.row(i) << std::endl;
         }      
+        // std::cout << std::endl;
+    }
+
+    void A1ToQuadChangeCurrentState(Eigen::VectorXd &current_state_)
+    {
+        Eigen::VectorXd temp_current_state = current_state_;
+        current_state_.conservativeResize(NUM_STATE-1);
+        current_state_.segment(0, 3) = temp_current_state.segment(3, 3);  // position goes to place 1
+        current_state_.segment(3, 3) = temp_current_state.segment(0, 3);  // orientation goes to place 2
+        current_state_.segment(6, 3) = temp_current_state.segment(9, 3);  // linear velocity goes to place 3
+        current_state_.segment(9, 3) = temp_current_state.segment(6, 3);  // angular velocity goes to place 4
+    }
+
+    void A1ToQuadChangeRefState(Eigen::MatrixXd &states_reference_)
+    {
+        Eigen::MatrixXd temp_states_reference = states_reference_;
+        states_reference_.conservativeResize(HORIZON_LENGTH, NUM_STATE-1);
+
+        for (int i=0; i<HORIZON_LENGTH; i++){
+            states_reference_.row(i).segment(0, 3) = temp_states_reference.row(i).segment(3, 3);  // position goes to place 1
+            states_reference_.row(i).segment(3, 3) = temp_states_reference.row(i).segment(0, 3);  // orientation goes to place 2
+            states_reference_.row(i).segment(6, 3) = temp_states_reference.row(i).segment(9, 3);  // linear velocity goes to place 3
+            states_reference_.row(i).segment(9, 3) = temp_states_reference.row(i).segment(6, 3);  // angular velocity goes to place 4
+        }       
     }
 
     /**
@@ -189,6 +210,7 @@ public:
         for (int i = 0; i < NUM_STATE * HORIZON_LENGTH; i++)
         {
             q_weights << 20.0, 10.0, 1.0, 0.0, 0.0, 420.0, 0.05, 0.05, 0.05, 30.0, 30.0, 10.0, 0;
+            // q_weights << 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0;
 
             // We insert weights in the diagonal of the matrix but we multiply by 2 
             // because the QP solver expects a 0.5 factor in front of the quadratic term
@@ -323,6 +345,8 @@ public:
             B_matrix_discrete.row(0) = current_B.row(0)*first_element_duration;
             B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>(i*NUM_STATE, 0) = B_matrix_discrete;
         }
+        // std::cout << B_matrix_discrete_list << std::endl << std::endl;
+        
         
         // std::cout << "B_matrix_discrete: \n" << B_matrix_discrete << std::endl;
         // std::cout << "B_matrix_discrete Shape: \n" << B_matrix_discrete.rows() << " x " << B_matrix_discrete.cols() << std::endl;
@@ -488,13 +512,13 @@ public:
         {
             for (int i=0; i<LEGS; i++)
             {
-            lower_bounds.segment<5>(i*NUM_BOUNDS) << 0,                                         //  0        <= fx + mu*fz
+            lower_bounds.segment(i*NUM_BOUNDS, 5) << 0,                                         //  0        <= fx + mu*fz
                                                     -std::numeric_limits<double>::infinity(),  // -infinity <= fx - mu*fz
                                                      0,                                         //  0        <= fy + mu*fz
                                                     -std::numeric_limits<double>::infinity(),  // -infinity <= fy - mu*fz
                                                     fz_min*contact[horizon_step][i];           //  fz_min   <= fz          fz_min*contact = 0 or 1 depending on the contact
                                                      
-            upper_bounds.segment<5>(i*NUM_BOUNDS) << std::numeric_limits<double>::infinity(),   //  fx + mu*fz <= infinity
+            upper_bounds.segment(i*NUM_BOUNDS, 5) << std::numeric_limits<double>::infinity(),   //  fx + mu*fz <= infinity
                                                      0,                                         //  fx - mu*fz <= 0
                                                      std::numeric_limits<double>::infinity(),   //  fy + mu*fz <= infinity
                                                      0,                                         //  fy - mu*fz <= 0
@@ -512,8 +536,8 @@ public:
             //                                          std::numeric_limits<double>::infinity();           //  fz <= fz_max            fz_max*contact = 0 or 1 depending on the contact
             }
 
-            lower_bounds_horizon.segment<NUM_BOUNDS * LEGS>(horizon_step*NUM_BOUNDS*LEGS) = lower_bounds;
-            upper_bounds_horizon.segment<NUM_BOUNDS * LEGS>(horizon_step*NUM_BOUNDS*LEGS) = upper_bounds;
+            lower_bounds_horizon.segment(horizon_step*NUM_BOUNDS*LEGS, NUM_BOUNDS * LEGS) = lower_bounds;
+            upper_bounds_horizon.segment(horizon_step*NUM_BOUNDS*LEGS, NUM_BOUNDS * LEGS) = upper_bounds;
             horizon_step += 1;
         }
         
@@ -534,8 +558,15 @@ public:
      * @returns = none
     */
     void setHessian(){   
-        // hessian = 2 * Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix;
+        // hessian = 2 * (Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix);
         hessian = Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix;
+        double lambda = 1e-3;
+        hessian = hessian + lambda * Eigen::MatrixXd::Identity(hessian.rows(), hessian.cols());
+        Eigen::JacobiSVD<Eigen::MatrixXd> svd(hessian);
+        Eigen::VectorXd singularValues = svd.singularValues();
+        double conditionNumber = singularValues(0) / singularValues(singularValues.size() - 1);
+        std::cout << "Condition number: " << conditionNumber << std::endl;
+        std::cout << "Eigenvalues: " << singularValues(0) << " " << singularValues(singularValues.size()-1) << std::endl;
         // std::cout << "Hessian: \n" << hessian << std::endl;
         // std::cout << "Shape: " << hessian.rows() << " x " << hessian.cols() << std::endl;
 
@@ -553,13 +584,15 @@ public:
     */
     void setGradient(Eigen::MatrixXd grf_plan_, Eigen::VectorXd current_state_, Eigen::MatrixXd ref_body_plan_){
         // Change the order of the states to match the order of our QP formulation
-        changeStatesOrder(current_state_, ref_body_plan_);
+        quadToA1ChangeStatesOrder(current_state_, ref_body_plan_);
+        // std::cout << current_state_ << std::endl << std::endl;
+        // std::cout << ref_body_plan_ << std::endl << std::endl;
         
         
         gradient.resize(NUM_DOF * HORIZON_LENGTH, 1);
         
         //Manipulate the inputs to satisfy our QP Implementation
-        states.segment(0,12) = current_state_;
+        // states = current_state_;
         // states_reference = ref_body_plan_.row(0).transpose();
 
         Eigen::VectorXd states_ref_stacked = Eigen::VectorXd::Zero(NUM_STATE * HORIZON_LENGTH);
@@ -575,7 +608,8 @@ public:
         // auto temp = hessian * U_vector;
         // gradient = temp + 2*Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix * (states - states_reference));
 
-        gradient = Bqp_matrix.transpose() * Q_matrix * ((Aqp_matrix *states) - states_ref_stacked);
+        gradient = Bqp_matrix.transpose() * Q_matrix * ((Aqp_matrix *current_state_) - states_ref_stacked);
+        // std::cout << gradient << std::endl << std::endl;
 
 
         //std::cout << "Gradient: \n" << gradient << std::endl;
@@ -615,29 +649,16 @@ public:
         x.row(0) = current_state.transpose();
 
         // Change state order
-        changeCurrentStateOrder(current_state);
-
-        // std::cout << "Size of body plan " << x.rows() << "  " << x.cols() << std::endl;
+        quadToA1ChangeCurrentState(current_state);
 
         Eigen::VectorXd x_next = current_state;
         for (int i = 1; i < HORIZON_LENGTH; i++)
         {
-            // std::cout <<"CURRENT HORIZON INDEX = " << i << std::endl;
-            // std::cout <<" -A MATRIX:\n" << A_matrix_discrete << std::endl << std::endl;
-            // std::cout <<" -X_" << i-1 << " = " << x_next.transpose() << std::endl << std::endl;
-            // std::cout <<" -CURRENT B MATRIX:\n" << B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0) << std::endl << std::endl;
-            // std::cout <<" -CURRENT U VECTOR = " << u.segment((i-1) * NUM_DOF, NUM_DOF).transpose() << std::endl << std::endl;
-
-            x_next = A_matrix_discrete * x_next + B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0) * u.segment((i-1) * NUM_DOF, NUM_DOF);
-
-            // std::cout <<" -X_" << i << " = " << x_next.transpose() << std::endl << std::endl;
-            
-            // Revert state back to original order
-            changeCurrentStateOrder(x_next);
-            x.row(i) = x_next.segment(0, NUM_STATE-1).transpose(); //why?
-            // std::cout << "--------------------------------------------------------------------------" << std::endl << std::endl;
+            x_next = A_matrix_discrete * x_next + B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0) * u.segment((i-1) * NUM_DOF, NUM_DOF);            
+            x.row(i) = x_next.transpose();
         }
-        // std::cout << x << std::endl << std::endl;
+        // Revert state back to original order
+        A1ToQuadChangeRefState(x);
     }
 
     void computeRollout(Eigen::MatrixXd &u, Eigen::MatrixXd &x, Eigen::VectorXd current_state)
@@ -645,27 +666,18 @@ public:
         x.row(0) = current_state.transpose();
 
         // Change state order
-        changeCurrentStateOrder(current_state);
+        quadToA1ChangeCurrentState(current_state);
 
         Eigen::VectorXd x_next = current_state;
         for (int i = 1; i < HORIZON_LENGTH; i++)
-        {
-            // std::cout <<"CURRENT HORIZON INDEX = " << i << std::endl;
-            // std::cout <<" -A MATRIX:\n" << A_matrix_discrete << std::endl << std::endl;
-            // std::cout <<" -X_" << i-1 << " = " << x_next.transpose() << std::endl << std::endl;
-            // std::cout <<" -CURRENT B MATRIX:\n" << B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0) << std::endl << std::endl;
-            // std::cout <<" -CURRENT U VECTOR = " << u.row(i-1) << std::endl << std::endl;
-          
+        {          
             x_next = A_matrix_discrete * x_next + B_matrix_discrete_list.block<NUM_STATE, NUM_DOF>((i-1)*NUM_STATE, 0) * u.row(i-1).transpose();
-            // std::cout <<" -X_" << i << " = " << x_next.transpose() << std::endl << std::endl;
-            
-            // Revert state back to original order
-            changeCurrentStateOrder(x_next);
-            x.row(i) = x_next.segment(0, NUM_STATE-1).transpose();
-
-            // std::cout << "--------------------------------------------------------------------------" << std::endl << std::endl;
+            x.row(i) = x_next.transpose();
+            // std::cout << x_next.transpose() << std::endl;
+            // std::cout << x.row(i).transpose() << std::endl << std::endl;
         }
-        // std::cout << x << std::endl << std::endl << std::endl;
+        // Revert state back to original order
+        A1ToQuadChangeRefState(x);
     }
 
 
@@ -716,7 +728,7 @@ public:
         // Rotate result grfs to the world frame
         // for (int i = 0; i< 3*LEGS*HORIZON_LENGTH; i+=3){
         //     Eigen::Vector3d grf = result.segment(i, 3); //extract a grf vector
-        //     result.segment(i, 3) = Rotation_z * grf;    //rotate the grf vector
+        //     result.segment(i, 3) = Rotation_z.transpose() * grf;    //rotate the grf vector
         // }
         // std::cout << "Result Shape: " << result.rows() << " x " << result.cols() << std::endl;
         // result.segment(0, 12) << 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0; 
@@ -743,11 +755,6 @@ public:
     double mu;
     double fz_min;
     double fz_max;
-
-    Eigen::VectorXd states; // Dummy values until we get the real states
-    Eigen::VectorXd states_reference; // Dummy values until we get the real states
-    Eigen::VectorXd U_vector;
-    
     
     //Matrices declaration
     Eigen::Matrix<double, NUM_STATE, NUM_STATE> A_matrix_continuous;
@@ -771,9 +778,6 @@ public:
     Eigen::SparseMatrix<double> hessian;
 
     Eigen::Matrix<double, 3, 3> Rotation_z;
-
-    //Eigen::Matrix<double, 3, LEGS> foot_positions;  
-
 
     bool is_first_run = true;  //to be set to false after first iteration, so that the initial guess is correctly set to hot-start the solver
 

@@ -543,7 +543,7 @@ bool LocalPlanner::computeLocalPlan() {
     // ROS_INFO("Acontinuous matrix set");
     local_body_planner_linear_->setAMatrixDiscrete(first_element_duration_);
     // ROS_INFO("Adiscrete matrix set");
-    local_body_planner_linear_->setBMatrixContinuous(grf_positions_world, rotation_z); 
+    local_body_planner_linear_->setBMatrixContinuous(grf_positions_body, rotation_z);
     // local_body_planner_linear_->setBMatrixContinuous(foot_positions_world_, rotation_z); 
     // ROS_INFO("Bcontinuous matrix set");
     local_body_planner_linear_->setBMatrixDiscrete(first_element_duration_); 
@@ -597,11 +597,15 @@ bool LocalPlanner::computeLocalPlan() {
     // std::cout << contact_schedule_ << std::endl << std::endl;
 
     
-    std::cout << "Result: " << result.head(12).transpose() << std::endl << std::endl;
+    std::cout << "Result ours: " << result.head(12).transpose() << std::endl << std::endl;
+    std::cout << "result shape " << result.rows() << " " << result.cols() << std::endl;
+    std::cout << "grf plan shape " << grf_plan_.rows() << " " << grf_plan_.cols() << std::endl;
 
-    for (int i = 0; i < N_; i++) {
+    for (int i = 0; i < N_-1; i++) {
       grf_plan_.row(i) = result.segment(12 * i, 12).transpose();
     }
+
+    // body_plan_ = ref_body_plan_;
 
     // std::cout << grf_plan_ << std::endl << std::endl;
     // if (!local_body_planner_nonlinear_->computeLegPlan(
@@ -611,9 +615,13 @@ bool LocalPlanner::computeLocalPlan() {
     //         terrain_grid_, body_plan_, grf_plan_))
     //   return false;
 
-    // local_body_planner_linear_->computeRollout(grf_plan_, body_plan_, current_state_);
+    // std::cout << "Result theirs: " << grf_plan_.row(0) << std::endl << std::endl;
 
-    // std::cout << grf_plan_ << std::endl;
+    // local_body_planner_linear_->computeRollout(grf_plan_, ref_body_plan_, current_state_);
+    // local_body_planner_linear_->computeRollout(grf_plan_, body_plan_, current_state_);
+    // std::cout << body_plan_ << std::endl << std::endl;
+
+    std::cout << grf_plan_ << std::endl << std::endl;
     // ROS_INFO("Linear MPC solved");
   }else{
     //  for (int i = 0; i < num_feet_; i++) {
@@ -740,7 +748,7 @@ void LocalPlanner::publishLocalPlan() {
 void LocalPlanner::spin() {
   ros::Rate r(update_rate_);
   int counter = 0;
-  // while (ros::ok()&& counter < 20) {
+  // while (ros::ok()&& counter < 200) {
   while (ros::ok()){//&& counter < 20) {
     ros::spinOnce();
     
