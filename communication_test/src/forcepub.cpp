@@ -19,7 +19,10 @@ public:
         param<double>("m_z", m_z, 0.0);
 
         publisher_ = advertise<geometry_msgs::Wrench>("/apply_force/trunk", 10);
+        
         geometry_msgs::Wrench cmd;
+        
+        //create force message from command line arguments
         cmd.force.x = f_x;
         cmd.force.y = f_y;
         cmd.force.z = f_z;
@@ -32,12 +35,14 @@ public:
         while (publisher_.getNumSubscribers() < 1) {}
         
         publisher_.publish(cmd);
+        // Sleep for 1 second
+        ros::Duration(1).sleep();
         
+        // Set the forces back to 0
         cmd.force.x = 0.0;
         cmd.force.y = 0.0;
         cmd.force.z = 0.0;
-        // Sleep for 1 second
-        ros::Duration(1).sleep();
+        
         cmd.torque.x = 0.0;
         cmd.torque.y = 0.0;
         cmd.torque.z = 0.0;

@@ -36,6 +36,9 @@ target_link_libraries(communication_node ${catkin_LIBRARIES})
 add_executable(forcepub src/forcepub.cpp)
 target_link_libraries(forcepub ${catkin_LIBRARIES})
 
+add_executable(velpub src/velpub.cpp)
+target_link_libraries(velpub ${catkin_LIBRARIES})
+
 add_executable(grf_retriver src/grf_retriver.cpp)
 target_link_libraries(grf_retriver ${catkin_LIBRARIES})
 
