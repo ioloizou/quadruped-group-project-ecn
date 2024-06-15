@@ -1,5 +1,6 @@
 #include "ros/ros.h"
 #include "std_msgs/String.h"
+#include <geometry_msgs/Wrench.h>
 
 int main(int argc, char **argv)
 {
@@ -7,7 +8,7 @@ int main(int argc, char **argv)
     ros::NodeHandle n;                                  
 
     //declare publisher
-    ros::Publisher test_publisher = n.advertise<std_msgs::String>("chatter",10); //(topic name, buffer size (qos))
+    ros::Publisher test_publisher = n.advertise<geometry_msgs::Wrench>("/robot1/apply_force/trunk",10); //(topic name, buffer size (qos))
 
     ros::Rate loop_rate(10);    //rate to publish the message (here 10Hz)
     int count = 0;
