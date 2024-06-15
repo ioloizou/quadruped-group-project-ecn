@@ -19,7 +19,31 @@ public:
         param<double>("m_z", m_z, 0.0);
 
         publisher_ = advertise<geometry_msgs::Wrench>("/apply_force/trunk", 10);
-        timer_ = createTimer(ros::Duration(10), &ForcePubNode::publisher_callback, this);    
+        geometry_msgs::Wrench cmd;
+        cmd.force.x = f_x;
+        cmd.force.y = f_y;
+        cmd.force.z = f_z;
+
+        cmd.torque.x = m_x;
+        cmd.torque.y = m_y;
+        cmd.torque.z = m_z;
+
+        broadcast(cmd);
+        while (publisher_.getNumSubscribers() < 1) {}
+        
+        publisher_.publish(cmd);
+        
+        cmd.force.x = 0.0;
+        cmd.force.y = 0.0;
+        cmd.force.z = 0.0;
+        // Sleep for 1 second
+        ros::Duration(1).sleep();
+        cmd.torque.x = 0.0;
+        cmd.torque.y = 0.0;
+        cmd.torque.z = 0.0;
+
+        publisher_.publish(cmd);
+        // timer_ = createTimer(ros::Duration(0.05), &ForcePubNode::publisher_callback, this);    
     }
 private:
     
@@ -34,20 +58,25 @@ private:
     double m_y;
     double m_z;
 
-    void publisher_callback(const ros::TimerEvent& event){
+    // void publisher_callback(const ros::TimerEvent& event){
         
-        geometry_msgs::Wrench cmd;
-        cmd.force.x = f_x;
-        cmd.force.y = f_y;
-        cmd.force.z = f_z;
+    //     geometry_msgs::Wrench cmd;
+    //     cmd.force.x = f_x;
+    //     cmd.force.y = f_y;
+    //     cmd.force.z = f_z;
 
-        cmd.torque.x = m_x;
-        cmd.torque.y = m_y;
-        cmd.torque.z = m_z;
+    //     cmd.torque.x = m_x;
+    //     cmd.torque.y = m_y;
+    //     cmd.torque.z = m_z;
 
-        broadcast(cmd);
-        publisher_.publish(cmd);
-    }
+    //     broadcast(cmd);
+    //     publisher_.publish(cmd);
+        
+    //     timer_.stop();
+
+    // }
+
+
     
     void broadcast(const geometry_msgs::Wrench msg){
         ROS_INFO("Publishing Twist:");
