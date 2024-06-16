@@ -45,11 +45,12 @@ const double dt = 0.03;
 const int NUM_BOUNDS = 5;
 
 //A1_INERTIA_BODY = Inertia Matrix of the robot in the body frame [kg*m/s^2].
-//ROBOT_MASS = Mass of the robot (5.75 [kg])
 const Eigen::Matrix3d A1_INERTIA_BODY = (Eigen::Matrix3d() << 
                                            0.0158533, -3.66 * std::pow(10, -5), -6.11 * std::pow(10, -5), 
                                            -3.66 * std::pow(10, -5), 0.0377999, -2.75 * std::pow(10, -5),
                                            -6.11 * std::pow(10, -5), -2.75 * std::pow(10, -5), 0.0456542).finished();
+
+//ROBOT_MASS = Mass of the robot (13.6 [kg])
 const double ROBOT_MASS = 13.6;
 
 
@@ -119,7 +120,7 @@ public:
     }
     
     // A function that change the order of states like that 
-    // Quad = [x y z vx vy vz theta_x theta_y theta_z wx wy wz g]
+    // Quad = [x y z theta_x theta_y theta_z vx vy vz wx wy wz g]
     // A1 = [theta_x theta_y theta_z x y z wx wy wz vx vy vz g]
     void quadToA1ChangeStatesOrder(Eigen::VectorXd &current_state_, Eigen::MatrixXd &states_reference_)
     { 
@@ -187,16 +188,13 @@ public:
      */
     Eigen::Matrix3d setRotationMatrix(double average_yaw){
         double psi = average_yaw;
-
-        //Eigen::Matrix3d Rotation_z;
-        
+        // std::cout<<"Average yaw: "<<psi<<std::endl;
         // Rotation matrix around the z-axis
-        Rotation_z << cos(psi), -sin(psi), 0,
-                      sin(psi), cos(psi), 0,
-                      0, 0, 1;
-        
-        
-        return Rotation_z.transpose();
+        Rotation_z << cos(psi), sin(psi), 0,
+                     -sin(psi), cos(psi), 0,
+                             0,        0, 1;
+
+        return Rotation_z;
     }
 
     /**
@@ -210,7 +208,6 @@ public:
         for (int i = 0; i < NUM_STATE * HORIZON_LENGTH; i++)
         {
             q_weights << 20.0, 10.0, 1.0, 0.0, 0.0, 420.0, 0.05, 0.05, 0.05, 30.0, 30.0, 10.0, 0;
-            // q_weights << 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0;
 
             // We insert weights in the diagonal of the matrix but we multiply by 2 
             // because the QP solver expects a 0.5 factor in front of the quadratic term
@@ -309,7 +306,7 @@ public:
                 vectorToSkewSymmetric(r_leg, r_leg_skew);
 
                 //Load the B matrix with the skew symmetric matrix of foot position multiplied by inertia and 1/mass
-                B_matrix_continuous.block<3, 3>(6, 3*j) = A1_INERTIA_WORLD.inverse() * r_leg_skew;
+                B_matrix_continuous.block<3, 3>(6, 3*j) = A1_INERTIA_WORLD.inverse() * Rotation_z*r_leg_skew;
                 B_matrix_continuous.block<3, 3>(9, 3*j) = Eigen::Matrix3d::Identity() * (1/ROBOT_MASS);
 
             }
@@ -523,17 +520,7 @@ public:
                                                      std::numeric_limits<double>::infinity(),   //  fy + mu*fz <= infinity
                                                      0,                                         //  fy - mu*fz <= 0
                                                      fz_max*contact[horizon_step][i];           //  fz <= fz_max            fz_max*contact = 0 or 1 depending on the contact
-            // lower_bounds.segment<5>(i*NUM_BOUNDS) << 0,                                         //  0        <= fx + mu*fz
-            //                                         -std::numeric_limits<double>::infinity(),  // -infinity <= fx - mu*fz
-            //                                          0,                                         //  0        <= fy + mu*fz
-            //                                         -std::numeric_limits<double>::infinity(),  // -infinity <= fy - mu*fz
-            //                                         -std::numeric_limits<double>::infinity();           //  fz_min   <= fz          fz_min*contact = 0 or 1 depending on the contact
-                                                     
-            // upper_bounds.segment<5>(i*NUM_BOUNDS) << std::numeric_limits<double>::infinity(),   //  fx + mu*fz <= infinity
-            //                                          0,                                         //  fx - mu*fz <= 0
-            //                                          std::numeric_limits<double>::infinity(),   //  fy + mu*fz <= infinity
-            //                                          0,                                         //  fy - mu*fz <= 0
-            //                                          std::numeric_limits<double>::infinity();           //  fz <= fz_max            fz_max*contact = 0 or 1 depending on the contact
+                                                     std::numeric_limits<double>::infinity();           //  fz <= fz_max            fz_max*contact = 0 or 1 depending on the contact
             }
 
             lower_bounds_horizon.segment(horizon_step*NUM_BOUNDS*LEGS, NUM_BOUNDS * LEGS) = lower_bounds;
@@ -558,7 +545,6 @@ public:
      * @returns = none
     */
     void setHessian(){   
-        // hessian = 2 * (Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix);
         hessian = Bqp_matrix.transpose() * Q_matrix * Bqp_matrix + R_matrix;
     }
 
@@ -589,14 +575,6 @@ public:
         for (int i = 0; i < HORIZON_LENGTH; i++){
             states_ref_stacked.segment(i*NUM_STATE, NUM_STATE) = ref_body_plan_.row(i).transpose();
         }
-        
-        // //Populate the U_vector with the values in grf_plan_:
-        // for(int i = 0; i < HORIZON_LENGTH; i++){
-        //     U_vector.segment(i*NUM_DOF, 1) = grf_plan_.row(i).transpose();
-        // }
-        
-        // auto temp = hessian * U_vector;
-        // gradient = temp + 2*Bqp_matrix.transpose() * Q_matrix * (Aqp_matrix * (states - states_reference));
 
         gradient = Bqp_matrix.transpose() * Q_matrix * ((Aqp_matrix *current_state_) - states_ref_stacked);
         // std::cout << gradient << std::endl << std::endl;
@@ -604,22 +582,6 @@ public:
 
         //std::cout << "Gradient: \n" << gradient << std::endl;
         //std::cout << "Shape: " << gradient.rows() << " x " << gradient.cols() << std::endl; 
-    }
-
-    /** 
-     * @brief This function sets the initial guess for the solver.
-     * If the solver is running for the first time, the initial guess is a vector of zeros.
-     * If it is the second or higher iterations, the initial guess is a hot-start with the previous iteration's minimizer
-     * 
-     * @param[in] = None
-     * 
-     * @param[out] = The initial guess for the solver
-     * 
-     * @returns = None
-    */    
-    void setInitialGuess(){
-        Eigen::VectorXd initial_guess = Eigen::VectorXd::Zero(NUM_STATE-1);
-        //std::cout << "Initial Guess: \n" << initial_guess << std::endl;
     }
 
 
@@ -706,35 +668,24 @@ public:
         // std::cout << "Solver init time: " << init_duration.count() << "ms" << std::endl; 
         // std::cout << "Solve time: " << solve_duration.count() << "ms" << std::endl;
 
-        //print results
         Eigen::VectorXd result = solver.getSolution();
-        //scale only the  components by 2:
-        // for (int i=0; i < LEGS; i++){
-        //     result.col(3*i + 2) = result.col(3*i + 2)*2;
-        // }
-        // result = result*2;
 
-        // Rotate result grfs to the world frame
+        // // Rotate result grfs to the body frame
         // for (int i = 0; i< 3*LEGS*HORIZON_LENGTH; i+=3){
         //     Eigen::Vector3d grf = result.segment(i, 3); //extract a grf vector
-        //     result.segment(i, 3) = Rotation_z * grf;    //rotate the grf vector
+        //     result.segment(i, 3) = Rotation_z.transpose() * grf;    //rotate the grf vector
         // }
+
+        // Print results
         // std::cout << "Result Shape: " << result.rows() << " x " << result.cols() << std::endl;
-        // result.segment(0, 12) << 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0; 
         // std::cout << "---------------------------------------------------------" << std::endl;
         // std::cout << "Result: " << result.head(12).transpose() << std::endl;
-        // std::cout << "Rotation Matrix: \n" << Rotation_z << std::endl;  
+        std::cout << "Rotation Matrix: \n" << Rotation_z << std::endl;  
         return result;
     }
 
     void printResults()
     {}
-
-
-    //Update functions (to not set matrices from ground up all over again):
-    // void updateMatrices(Eigen::VectorXd state){
-
-    // }
 
     //ROS Stuff
     ros::NodeHandle nh_;

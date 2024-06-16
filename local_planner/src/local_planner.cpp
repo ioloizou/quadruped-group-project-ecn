@@ -484,13 +484,6 @@ bool LocalPlanner::computeLocalPlan() {
       current_plan_index_, body_plan_, ref_primitive_plan_, control_mode_,
       contact_schedule_);
 
-  // for (int i = 0; i < N_; i++) 
-  //   {
-  //     for (int j=0; j<4; ++j)
-  //     {
-  //       contact_schedule_[i][j] = 1;
-  //     }
-  //   }
   // ROS_INFO("Computed the contact schedule");
 
   // Compute the new footholds if we have a valid existing plan (i.e. if
@@ -525,7 +518,6 @@ bool LocalPlanner::computeLocalPlan() {
   
   // Case, either use nonlinear or linear
   if (is_linear_){
-    // std::cout << ref_body_plan_ << std::endl;
     //OUR STUFF
     // ROS_INFO("Entering Linear MPC");
     local_body_planner_linear_ -> initMatricesZero();
@@ -534,7 +526,6 @@ bool LocalPlanner::computeLocalPlan() {
     // ROS_INFO("Q Matrix set");
     local_body_planner_linear_ ->setRMatrix();
     // ROS_INFO("R Matrix set");
-    // auto average_yaw = local_body_planner_linear_->extractPsi(body_plan_);
     double average_yaw = local_body_planner_linear_->extractPsi(ref_body_plan_);
     // ROS_INFO("Average yaw set");
     auto rotation_z = local_body_planner_linear_ ->setRotationMatrix(average_yaw);
@@ -544,7 +535,6 @@ bool LocalPlanner::computeLocalPlan() {
     local_body_planner_linear_->setAMatrixDiscrete(first_element_duration_);
     // ROS_INFO("Adiscrete matrix set");
     local_body_planner_linear_->setBMatrixContinuous(grf_positions_body, rotation_z);
-    // local_body_planner_linear_->setBMatrixContinuous(foot_positions_world_, rotation_z); 
     // ROS_INFO("Bcontinuous matrix set");
     local_body_planner_linear_->setBMatrixDiscrete(first_element_duration_); 
     // ROS_INFO("Bdiscrete matrix set");
@@ -558,19 +548,10 @@ bool LocalPlanner::computeLocalPlan() {
     // ROS_INFO("Bounds set");
     local_body_planner_linear_->setHessian();
     // ROS_INFO("Hessian set");
-    // local_body_planner_linear_->changeStatesOrder(current_state_, ref_body_plan_);
-    // local_body_planner_linear_->setGradient(grf_plan_, current_state_, body_plan_);
     local_body_planner_linear_->setGradient(grf_plan_, current_state_, ref_body_plan_);
     // ROS_INFO("Gradient set");
-    // local_body_planner_linear_->setInitialGuess();
-    // ROS_INFO("Initial guess set");
     auto result = local_body_planner_linear_->solveQP();
-    // result = result *2;
-    // std::cout << first_element_duration_ << std::endl; 
-    // Eigen::VectorXd result(12);
-    // std::cout << "-----------------------------------------------" << std::endl;
-    // result << 0, 0, 15, 0, 0, 15, 0, 0, 15, 0, 0, 15;
-    
+    // ROS_INFO("QP solved");
 
     // for (int i = 0; i < num_feet_; i++) {
     //   if (i % 2 == 0)
@@ -596,24 +577,11 @@ bool LocalPlanner::computeLocalPlan() {
     // std::cout << std::endl;
     // std::cout << contact_schedule_ << std::endl << std::endl;
 
+    // std::cout << grf_plan_ << std::endl << std::endl;
     
-    // std::cout << "Result ours: " << result.head(12).transpose() << std::endl << std::endl;
+    // std::cout << "Result ours: " << result << std::endl << std::endl;
     // std::cout << "result shape " << result.rows() << " " << result.cols() << std::endl;
     // std::cout << "grf plan shape " << grf_plan_.rows() << " " << grf_plan_.cols() << std::endl;
-
-    // for (int i = 0; i < N_-1; i++) {
-    //   grf_plan_.row(i) = result.segment(12 * i, 12).transpose();
-    // }
-
-    // body_plan_ = ref_body_plan_;
-
-    // std::cout << grf_plan_ << std::endl << std::endl;
-    // if (!local_body_planner_nonlinear_->computeLegPlan(
-    //         current_full_state, ref_body_plan_, grf_positions_body,
-    //         grf_positions_world, foot_velocities_world_, contact_schedule_,
-    //         ref_ground_height_, dt_, 0,
-    //         terrain_grid_, body_plan_, grf_plan_))
-    //   return false;
 
     for (int i = 0; i < N_-1; i++) {
       grf_plan_.row(i) = result.segment(12 * i, 12).transpose();
@@ -629,17 +597,6 @@ bool LocalPlanner::computeLocalPlan() {
     // std::cout << grf_plan_ << std::endl << std::endl;
     // ROS_INFO("Linear MPC solved");
   }else{
-    //  for (int i = 0; i < num_feet_; i++) {
-    //     grf_plan_.col(3*i+2).fill(32.0);
-    // }
-
-    // for (int i = 0; i < num_feet_; i++) {
-    //   if (i % 2 == 0)
-    //     grf_plan_.col(3*i+2).fill(42);
-    //   else
-    //     grf_plan_.col(3*i+2).fill(34);
-    // }
-    // auto old_body_plan = body_plan_;
   // Compute leg plan with MPC, return if solve fails
     if (!local_body_planner_nonlinear_->computeLegPlan(
             current_full_state, ref_body_plan_, grf_positions_body,
@@ -647,8 +604,6 @@ bool LocalPlanner::computeLocalPlan() {
             ref_ground_height_, first_element_duration_, plan_index_diff_,
             terrain_grid_, body_plan_, grf_plan_))
       return false;
-
-      // body_plan_ = old_body_plan;
 
       // std::cout << grf_plan_ << std::endl << std::endl; 
      
