@@ -37,7 +37,7 @@
     </group>
 
     <param name="nmpc_controller/enable_adaptive_complexity" value="$(arg ac)" />
-    <node name="local_planner" pkg="local_planner" type="local_planner_node" output="screen" />
+    <node name="local_planner" pkg="local_planner" type="local_planner_node" output="screen"/>
 
     <group if="$(arg logging)">
         <include file="$(find quad_utils)/launch/logging.launch">

@@ -3,9 +3,8 @@
 Eigen::IOFormat CleanFmt(4, 0, ", ", "\n", "[", "]");
 
 LocalPlanner::LocalPlanner(ros::NodeHandle nh)
-    : local_body_planner_nonlinear_(), local_footstep_planner_() {
-  nh_ = nh;
-
+    : local_body_planner_linear_(), local_body_planner_nonlinear_(), local_footstep_planner_() { // we modified nonlinear to linear
+  nh_ = nh; 
   // Load rosparams from parameter server
   std::string terrain_map_topic, body_plan_topic, robot_state_topic,
       local_plan_topic, foot_plan_discrete_topic, foot_plan_continuous_topic,
@@ -65,7 +64,7 @@ LocalPlanner::LocalPlanner(ros::NodeHandle nh)
   nh.param<bool>("local_planner/use_twist_input", use_twist_input_, false);
 
   // Convert kinematics
-  quadKD_ = std::make_shared<quad_utils::QuadKD>();
+  quadKD_ = std::make_shared<quad_utils::QuadKD>(); // weeeeee neeeeed toooo undeeerstand
 
   // Initialize body and foot position arrays (grf_plan horizon is one index
   // shorter since control after last state is not in the horizon)
@@ -84,9 +83,14 @@ LocalPlanner::LocalPlanner(ros::NodeHandle nh)
     grf_plan_.col(3 * i + 2).fill(13.3 * 9.81 / num_feet_);
   }
 
+  // Flag to use linear or nonlinear
+  is_linear_ = true;
+
   // Initialize body and footstep planners
-  initLocalBodyPlanner();
   initLocalFootstepPlanner();
+  if (is_linear_) initLocalBodyPlannerLinear(); // MPC BOYS
+  // if (!is_linear_) initLocalBodyPlanner();
+  if (is_linear_) initLocalBodyPlanner();
 
   // Initialize twist input variables
   cmd_vel_.resize(6);
@@ -95,14 +99,14 @@ LocalPlanner::LocalPlanner(ros::NodeHandle nh)
   first_plan_ = true;
 
   // Initialize stand pose
-  stand_pose_.fill(std::numeric_limits<double>::max());
+  stand_pose_.fill(std::numeric_limits<double>::max()); // whyyyyyy
   control_mode_ = STAND;
 
   // Initialize the time duration to the next plan index
   first_element_duration_ = dt_;
 
   // Initialize the plan index diff
-  plan_index_diff_ = 0;
+  plan_index_diff_ = 0; 
 
   // Initialize the plan index
   current_plan_index_ = 0;
@@ -119,6 +123,21 @@ void LocalPlanner::initLocalBodyPlanner() {
     ROS_WARN("WRONG ROBOT TYPE");
   }
   local_body_planner_nonlinear_ = std::make_shared<NMPCController>(nh_, type);
+}
+
+void LocalPlanner::initLocalBodyPlannerLinear(){
+  SystemID type;
+    if (robot_name_ == "spirit") {
+    type = SPIRIT;
+  } else if (robot_name_ == "a1") {
+    type = A1;
+  } else {
+    ROS_WARN("WRONG ROBOT TYPE");
+  }
+  local_body_planner_linear_ = std::make_shared<MPC>(nh_, type); // maybe we need to add nh and type
+  //Initialize what is ran once in the LMPC:
+  
+  ROS_INFO("Linear MPC initialized");
 }
 
 void LocalPlanner::initLocalFootstepPlanner() {
@@ -168,6 +187,7 @@ void LocalPlanner::initLocalFootstepPlanner() {
       toe_radius_);
 
   past_footholds_msg_.feet.resize(num_feet_);
+  // ROS_INFO("Local footstep planner initialized");
 }
 
 void LocalPlanner::terrainMapCallback(
@@ -178,21 +198,27 @@ void LocalPlanner::terrainMapCallback(
   terrain_.loadDataFromGridMap(terrain_grid_);
   local_footstep_planner_->updateMap(terrain_);
   local_footstep_planner_->updateMap(terrain_grid_);
+  // ROS_INFO("Terrain map received");
 }
 
+// Save the most recent robot plan
 void LocalPlanner::robotPlanCallback(
     const quad_msgs::RobotPlan::ConstPtr &msg) {
   body_plan_msg_ = msg;
+  // ROS_INFO("Robot plan received");
 }
 
+// Save the most recent robot state
 void LocalPlanner::robotStateCallback(
     const quad_msgs::RobotState::ConstPtr &msg) {
   // Make sure the data is actually populated
   if (msg->feet.feet.empty() || msg->joints.position.empty()) return;
 
   robot_state_msg_ = msg;
+  // ROS_INFO("Robot state received");
 }
 
+// Calculating the commanded velocity with a filter
 void LocalPlanner::cmdVelCallback(const geometry_msgs::Twist::ConstPtr &msg) {
   // Ignore non-planar components of desired twist
   cmd_vel_[0] = (1 - cmd_vel_filter_const_) * cmd_vel_[0] +
@@ -207,8 +233,11 @@ void LocalPlanner::cmdVelCallback(const geometry_msgs::Twist::ConstPtr &msg) {
 
   // Record when this was last reached for safety
   last_cmd_vel_msg_time_ = ros::Time::now();
+  ROS_INFO_THROTTLE(1.0, "Cmd vel callback received, time: %f",
+                    last_cmd_vel_msg_time_.toSec());
 }
 
+// Not clear yet what is doing
 void LocalPlanner::getReference() {
   if (first_plan_) {
     first_plan_ = false;
@@ -231,6 +260,7 @@ void LocalPlanner::getReference() {
   }
 
   // Tracking trajectory so enter run mode
+  // control_mode_ = STAND;
   control_mode_ = STEP;
 
   // Get plan index, compare with the previous one to check if this is a
@@ -264,6 +294,7 @@ void LocalPlanner::getReference() {
       cmd_vel_.setZero();
       ROS_WARN_THROTTLE(1.0, "No cmd_vel data, setting twist cmd_vel to zero");
     }
+    // ROS_INFO("Using twist input, and cmd_vel received?");
 
     // Set initial ground height
     ref_ground_height_(0) = local_footstep_planner_->getTerrainHeight(
@@ -275,6 +306,7 @@ void LocalPlanner::getReference() {
         stand_pose_(2) == std::numeric_limits<double>::max()) {
       stand_pose_ << current_state_[0], current_state_[1], current_state_[5];
     }
+    // ROS_INFO("Stand pose initialized");
 
     // Set initial condition for forward integration
     Eigen::Vector2d support_center;
@@ -285,6 +317,7 @@ void LocalPlanner::getReference() {
       support_center.y() +=
           robot_state_msg_->feet.feet[i].position.y / ((double)num_feet_);
     }
+    // ROS_INFO("Initial condition for integration initialized");
 
     // Step if velocity commanded, current velocity exceeds threshold, or too
     // far from center of support
@@ -294,6 +327,7 @@ void LocalPlanner::getReference() {
          (support_center - current_state_.segment(0, 2)).norm() >
              stand_pos_error_threshold_);
 
+    // is_stepping = false; // we need to change this
     if (is_stepping) {
       control_mode_ = STEP;
       stand_pose_ << current_state_[0], current_state_[1], current_state_[5];
@@ -306,6 +340,7 @@ void LocalPlanner::getReference() {
       stand_pose_ = stand_pose_ * (1 - 1 / update_rate_) +
                     current_stand_pose * 1 / update_rate_;
     }
+    // ROS_INFO("Control mode set");
 
     ref_body_plan_(0, 0) = stand_pose_[0];  // support_center.x();
     ref_body_plan_(0, 1) = stand_pose_[1];  // support_center.x();
@@ -322,6 +357,8 @@ void LocalPlanner::getReference() {
     ref_body_plan_(0, 10) = cmd_vel_[4];
     ref_body_plan_(0, 11) = cmd_vel_[5];
 
+    // ROS_INFO("Reference body plan initialized");
+
     // Alternatively only adaptive pitch
     // ref_body_plan_(0, 4) = local_footstep_planner_->getTerrainSlope(
     //     current_state_(0), current_state_(1), current_state_(6),
@@ -332,6 +369,7 @@ void LocalPlanner::getReference() {
         ref_body_plan_(0, 0), ref_body_plan_(0, 1), ref_body_plan_(0, 5),
         ref_body_plan_(0, 3), ref_body_plan_(0, 4));
 
+    // ROS_INFO("Terrain slope initialized");
     // Integrate to get full body plan (Forward Euler)
     for (int i = 1; i < N_; i++) {
       Eigen::VectorXd current_cmd_vel = cmd_vel_;
@@ -365,6 +403,7 @@ void LocalPlanner::getReference() {
           ref_body_plan_(i, 0), ref_body_plan_(i, 1), ref_body_plan_(i, 5),
           ref_body_plan_(i, 3), ref_body_plan_(i, 4));
     }
+    // ROS_INFO("Reference body plan integrated");
   } else {
     // Use global plan
     for (int i = 0; i < N_; i++) {
@@ -395,6 +434,7 @@ void LocalPlanner::getReference() {
         stand_pos_error_threshold_) {
       control_mode_ = STAND;
     }
+    ROS_INFO("Using global plan");
   }
 
   // Update the body plan to use for foot planning
@@ -444,6 +484,8 @@ bool LocalPlanner::computeLocalPlan() {
       current_plan_index_, body_plan_, ref_primitive_plan_, control_mode_,
       contact_schedule_);
 
+  // ROS_INFO("Computed the contact schedule");
+
   // Compute the new footholds if we have a valid existing plan (i.e. if
   // grf_plan is filled)
   local_footstep_planner_->computeFootPlan(
@@ -452,7 +494,7 @@ bool LocalPlanner::computeLocalPlan() {
       current_foot_velocities_world_, first_element_duration_,
       past_footholds_msg_, foot_positions_world_, foot_velocities_world_,
       foot_accelerations_world_);
-
+  // ROS_INFO("Computed foot plan");
   // Transform the new foot positions into the body frame for body planning
   local_footstep_planner_->getFootPositionsBodyFrame(
       body_plan_, foot_positions_world_, foot_positions_body_);
@@ -473,16 +515,101 @@ bool LocalPlanner::computeLocalPlan() {
   quad_utils::vectorToEigen(robot_state_msg_->joints.velocity, joint_vel);
   current_full_state.segment(12, 12) = joint_pos;
   current_full_state.segment(24, 12) = joint_vel;
+  
+  // Case, either use nonlinear or linear
+  if (is_linear_){
+    //OUR STUFF
+    // ROS_INFO("Entering Linear MPC");
+    local_body_planner_linear_ -> initMatricesZero();
+    // ROS_INFO("Matrices initialized");
+    local_body_planner_linear_ ->setQMatrix();
+    // ROS_INFO("Q Matrix set");
+    local_body_planner_linear_ ->setRMatrix();
+    // ROS_INFO("R Matrix set");
+    double average_yaw = local_body_planner_linear_->extractPsi(ref_body_plan_);
+    // ROS_INFO("Average yaw set");
+    auto rotation_z = local_body_planner_linear_ ->setRotationMatrix(average_yaw);
+    // ROS_INFO("Rotation matrix set");
+    local_body_planner_linear_->setAMatrixContinuous(rotation_z);
+    // ROS_INFO("Acontinuous matrix set");
+    local_body_planner_linear_->setAMatrixDiscrete(first_element_duration_);
+    // ROS_INFO("Adiscrete matrix set");
+    local_body_planner_linear_->setBMatrixContinuous(grf_positions_body, rotation_z);
+    // ROS_INFO("Bcontinuous matrix set");
+    local_body_planner_linear_->setBMatrixDiscrete(first_element_duration_); 
+    // ROS_INFO("Bdiscrete matrix set");
+    local_body_planner_linear_->setAqpMatrix();
+    // ROS_INFO("Aqp matrix set");
+    local_body_planner_linear_->setBqpMatrix();
+    // ROS_INFO("Bqp matrix set");
+    local_body_planner_linear_->setAcMatrix();
+    // ROS_INFO("AC matrix set");
+    local_body_planner_linear_->setBounds(contact_schedule_);
+    // ROS_INFO("Bounds set");
+    local_body_planner_linear_->setHessian();
+    // ROS_INFO("Hessian set");
+    local_body_planner_linear_->setGradient(grf_plan_, current_state_, ref_body_plan_);
+    // ROS_INFO("Gradient set");
+    auto result = local_body_planner_linear_->solveQP();
+    // ROS_INFO("QP solved");
 
+    // for (int i = 0; i < num_feet_; i++) {
+    //   if (i % 2 == 0)
+    //     grf_plan_.col(3*i+2).fill(42);
+    //   else
+    //     grf_plan_.col(3*i+2).fill(34);
+    // }
+
+    // for (int i = 0; i < N_; i++) 
+    // {
+    //   for (int j=0; j<4; ++j)
+    //   {
+    //     contact_schedule_[i][j] = 1;
+    //   }
+    // }
+
+    // for (const auto& row : contact_schedule_) {
+    //     for (const auto& elem : row) {
+    //         std::cout << elem << " ";
+    //     }
+    //     std::cout << std::endl; // Newline at the end of each row
+    // }
+    // std::cout << std::endl;
+    // std::cout << contact_schedule_ << std::endl << std::endl;
+
+    // std::cout << grf_plan_ << std::endl << std::endl;
+    
+    // std::cout << "Result ours: " << result << std::endl << std::endl;
+    // std::cout << "result shape " << result.rows() << " " << result.cols() << std::endl;
+    // std::cout << "grf plan shape " << grf_plan_.rows() << " " << grf_plan_.cols() << std::endl;
+
+    for (int i = 0; i < N_-1; i++) {
+      grf_plan_.row(i) = result.segment(12 * i, 12).transpose();
+    }
+
+    // std::cout << "Result theirs: " << grf_plan_.row(0) << std::endl << std::endl;
+
+    // local_body_planner_linear_->computeRollout(grf_plan_, ref_body_plan_, current_state_);
+    // std::cout << body_plan_.rows() << " " << body_plan_.cols() << std::endl;
+    local_body_planner_linear_->computeRollout(grf_plan_, body_plan_, current_state_);
+    // std::cout << body_plan_ << std::endl << std::endl;
+
+    // std::cout << grf_plan_ << std::endl << std::endl;
+    // ROS_INFO("Linear MPC solved");
+  }else{
   // Compute leg plan with MPC, return if solve fails
-  if (!local_body_planner_nonlinear_->computeLegPlan(
-          current_full_state, ref_body_plan_, grf_positions_body,
-          grf_positions_world, foot_velocities_world_, contact_schedule_,
-          ref_ground_height_, first_element_duration_, plan_index_diff_,
-          terrain_grid_, body_plan_, grf_plan_))
-    return false;
+    if (!local_body_planner_nonlinear_->computeLegPlan(
+            current_full_state, ref_body_plan_, grf_positions_body,
+            grf_positions_world, foot_velocities_world_, contact_schedule_,
+            ref_ground_height_, first_element_duration_, plan_index_diff_,
+            terrain_grid_, body_plan_, grf_plan_))
+      return false;
 
-  N_current_ = body_plan_.rows();
+      // std::cout << grf_plan_ << std::endl << std::endl; 
+     
+  } // we need to check again if this is correct here
+  
+  N_current_ = body_plan_.rows(); 
   foot_positions_world_ = grf_positions_world;
   for (size_t i = 0; i < 4; i++) {
     foot_positions_world_.col(3 * i + 2) =
@@ -514,8 +641,8 @@ void LocalPlanner::publishLocalPlan() {
   foot_plan_msg.header = local_plan_msg.header;
 
   // Add NLP diagnostic information
-  local_body_planner_nonlinear_->getNLPDiagnostics().loadDiagnosticsMsg(
-      local_plan_msg.diagnostics);
+  // local_body_planner_nonlinear_->getNLPDiagnostics().loadDiagnosticsMsg(
+  //     local_plan_msg.diagnostics);
 
   // Compute the discrete and continuous foot plan messages
   local_footstep_planner_->loadFootPlanMsgs(
@@ -532,9 +659,14 @@ void LocalPlanner::publishLocalPlan() {
     quad_utils::ikRobotState(*quadKD_, robot_state_msg);
 
     // Add the GRF information
+    // std::cout<<grf_plan_<<std::endl; // To see the grf plan
+    // std::cout<<"GRF plan"<<std::endl;
+    // std::cout<<"-----------------------------------------------"<<std::endl;
+
     quad_msgs::GRFArray grf_array_msg;
     quad_utils::eigenToGRFArrayMsg(grf_plan_.row(i), foot_plan_msg.states[i],
                                    grf_array_msg);
+    // std::cout << grf_plan_ << std::endl;
     grf_array_msg.contact_states.resize(num_feet_);
     for (int j = 0; j < num_feet_; j++) {
       grf_array_msg.contact_states[j] = contact_schedule_[i][j];
@@ -575,10 +707,11 @@ void LocalPlanner::publishLocalPlan() {
 
 void LocalPlanner::spin() {
   ros::Rate r(update_rate_);
-
-  while (ros::ok()) {
+  int counter = 0;
+  // while (ros::ok()&& counter < 200) {
+  while (ros::ok()){//&& counter < 20) {
     ros::spinOnce();
-
+    
     // Wait until all required data has been received
     if (terrain_.isEmpty() || (body_plan_msg_ == NULL && !use_twist_input_) ||
         robot_state_msg_ == NULL)
@@ -590,7 +723,8 @@ void LocalPlanner::spin() {
     // Compute the local plan and publish if it solved successfully, otherwise
     // just sleep
     if (computeLocalPlan()) publishLocalPlan();
-
+    counter += 1;
+    // ros::Duration(0.1).sleep();
     r.sleep();
   }
 }

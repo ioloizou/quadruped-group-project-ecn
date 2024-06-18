@@ -15,6 +15,8 @@
 #include <ros/ros.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
+#include <lmpc_controller/lmpc_controller.h>
+
 //! Local Body Planner library
 /*!
    Wrapper around Quadrupedal MPC that interfaces with our ROS architecture
@@ -281,6 +283,14 @@ class LocalPlanner {
 
   /// Position error threshold (from foot centroid) to enter stand mode
   double stand_pos_error_threshold_;
+
+
+  // ---------------------------------------------------------------- OUR IMPLEMENTATION ------------------------------
+  void initLocalBodyPlannerLinear();
+
+  std::shared_ptr<MPC> local_body_planner_linear_;
+
+  bool is_linear_;
 };
 
 #endif  // LOCAL_PLANNER_H

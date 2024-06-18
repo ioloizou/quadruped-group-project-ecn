@@ -697,6 +697,8 @@ void QuadKD::computeInverseDynamics(const Eigen::VectorXd &state_pos,
       !((tau - tau).array() == (tau - tau).array()).all()) {
     tau.setZero();
   }
+  // std::cout << "GRF = " << grf.transpose() << std::endl;
+  // std::cout << "tau = " << tau.transpose() << std::endl;
 }
 
 bool QuadKD::convertCentroidalToFullBody(const Eigen::VectorXd &body_state,
