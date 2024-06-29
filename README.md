@@ -1,59 +1,49 @@
-[![CircleCI](https://circleci.com/gh/robomechanics/quad-sdk/tree/main.svg?style=shield)](https://circleci.com/gh/robomechanics/quad-sdk/tree/main)
-![Example image](doc/quad_sdk_promo.png)
 
-## Overview
+## Description
 
-Quad-SDK is an open source, ROS-based full stack software framework for agile quadrupedal locomotion. The design of Quad-SDK is focused on the vertical integration of planning, control, estimation, communication, and development tools which enable agile quadrupedal locomotion in simulation and hardware with minimal user changes for multiple platforms. The modular software architecture allows researchers to experiment with their own implementations of different components while leveraging the existing framework. Quad-SDK also offers Gazebo simulation support and a suite of visualization and data-processing tools for rapid development. Refer to the [paper] for high-level details of the framework.
+This fork implements the concepts presented in the research paper "Dynamic Locomotion in the MIT Cheetah 3 Through Convex Model-Predictive Control" within the Quad-SDK framework. This project was developed as part of the Group Project in the Master's program in Advanced Robotics at Centrale Nantes.
 
-**Keywords:** Legged Robotics, Quadrupeds, Planning, Control, Leaping, ROS
+## Key Features
 
-### License
+- Implementation of the paper's convex MPC approach for dynamic locomotion control of the MIT Cheetah 3 robot.
+- Integration of the control algorithm into the Quad-SDK environment.
 
-The source code is released under a [MIT License](LICENSE).
+## Paper
 
-**Authors: Joe Norby, Yanhao Yang, Ardalan Tajbakhsh, Jiming Ren, Justin K. Yim, Alexandra Stutt, Qishun Yu, Nikolai Flowers, and Aaron M. Johnson<br />
-Affiliation: [The Robomechanics Lab at Carnegie Mellon University](https://www.cmu.edu/me/robomechanicslab/)<br />
-Maintainer: Ardalan Tajbakhsh, atajbakh@andrew.cmu.edu**
-
-The packages in Quad-SDK have been tested under [ROS] Melodic on Ubuntu 18.04.
-This is research code, expect that it changes often and any fitness for a particular purpose is disclaimed.
-
-### Publications
-
-If you use this work in an academic context, please cite the following publications as relevant:
-
-* Repository: J. Norby, Y. Yang, A. Tajbakhsh, J. Ren, J. K. Yim, A. Stutt, Q. Yu, N. Flowers, and A. M. Johnson. Quad-
-SDK: Full stack software framework for agile quadrupedal locomotion. In ICRA Workshop on
-Legged Robots, May 2022. ([paper])
-
-        @inproceedings{abs:norby-quad-sdk-2022,
-          author        = {Joseph Norby and Yanhao Yang and Ardalan Tajbakhsh and Jiming Ren and Justin K. Yim and Alexandra Stutt and Qishun Yu and Nikolai Flowers and Aaron M. Johnson},
-          title         = {Quad-{SDK}: Full Stack Software Framework for Agile Quadrupedal Locomotion},
-          booktitle     = {ICRA Workshop on Legged Robots},
-          year          = {2022},
-          month         = {May},
-          type          = {workshop abstract},
-          url_Info      = {https://leggedrobots.org/index.html},
-          url_PDF       = {http://www.andrew.cmu.edu/user/amj1/papers/Quad_SDK_ICRA_Abstract.pdf},
-          keywords      = {Control,Planning,Leaping}
-        }
-        
-* Global Planner: J. Norby and A. M. Johnson, “Fast global motion planning for dynamic legged robots,” in 2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS). IEEE, 2020, pp. 3829–3836. ([paper](https://www.andrew.cmu.edu/user/amj1/papers/IROS2020_Fast_Global_Motion_Planning.pdf))
-
-        @inproceedings{Norby2020,
-	  	title={Fast global motion planning for dynamic legged robots},
-	  	author={Norby, Joseph and Johnson, Aaron M},
-	  	booktitle={2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
-	  	pages={3829--3836},
-	  	year={2020},
-	  	organization={IEEE}
-		}
-
-
+The paper is on the following link [Dynamic Locomotion in the MIT Cheetah 3 Through Convex Model-Predictive Control](https://dspace.mit.edu/bitstream/handle/1721.1/138000/convex_mpc_2fix.pdf).
 
 ## Installation
 
+### Default Quad-SDK
 Refer to the [Quad-SDK Wiki](https://github.com/robomechanics/quad-sdk/wiki/1.-Getting-Started-with-Quad-SDK) for installation, dependency, and unit testing information. Currently Quad-SDK requires ROS Melodic on Ubuntu 18.04. All other dependencies are installed with the included setup script.
+
+### Current fork
+
+### Installation Instructions for OSQP and OSQP-Eigen
+
+To run the convex MPC, you need to install the OSQP and OSQP-Eigen solvers. We recommend building from source for the most reliable installation.
+
+### 1. Installing OSQP
+
+* **Instructions:** Follow the official guide: https://osqp.org/docs/get_started/sources.htm
+* **CMake Issue:** If you encounter problems with the CMake version, do the following:
+    1. Download the latest bash script from the CMake website: https://cmake.org/download/
+    2. Copy it to `/opt/`
+    3. Make the script executable: `chmod +x /opt/cmake-3.*your_version*.sh`
+    4. Run: `sudo bash /opt/cmake-3.*your_version*.sh` (You can change the installation directory to `/opt/` if you prefer)
+    5. Create a symbolic link: `sudo ln -s /opt/cmake-3.*your_version*/bin/* /usr/local/bin`
+    6. Verify the installation: `cmake --version`
+* **Additional Note:** If you want to install OSQP in `/usr/local`, run the following before `make`:  `cmake -DCMAKE_INSTALL_PREFIX=/usr/local ..`
+
+### 2. Installing OSQP-Eigen
+
+* **Instructions:** Follow the guide on GitHub: https://github.com/robotology/osqp-eigen
+* **Additional Commands:** If you want to install in `/usr/local`, run:
+    * `cmake -DCMAKE_INSTALL_PREFIX:PATH=/usr/local/ ../` 
+    * `export OsqpEigen_DIR=/usr/local/` (Add this to your `.bashrc` file)
+    * `export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib` (Add this to your `.bashrc` file)
+
+**Important:** Make sure to adjust file paths and version numbers in commands as needed for your specific setup.
 
 ## Usage
 
