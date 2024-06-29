@@ -1,7 +1,13 @@
 
+
+
 ## Description
 
 This fork implements the concepts presented in the research paper "Dynamic Locomotion in the MIT Cheetah 3 Through Convex Model-Predictive Control" within the Quad-SDK framework. This project was developed as part of the Group Project in the Master's program in Advanced Robotics at Centrale Nantes.
+
+<p align="center">
+  <img src="https://github.com/ioloizou/quadruped-group-project-ecn/assets/60272652/1f73c2da-8377-4087-b402-0ab74da75c94" alt="Quadruped">
+</p>
 
 ## Key Features
 
