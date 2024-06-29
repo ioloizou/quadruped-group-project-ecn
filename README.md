@@ -12,12 +12,10 @@ This fork implements the concepts presented in the research paper "Dynamic Locom
 
 The paper is on the following link [Dynamic Locomotion in the MIT Cheetah 3 Through Convex Model-Predictive Control](https://dspace.mit.edu/bitstream/handle/1721.1/138000/convex_mpc_2fix.pdf).
 
-## Installation
+## Default Quad-SDK installation
+Refer to the [Quad-SDK Wiki](https://github.com/robomechanics/quad-sdk/wiki/1.-Getting-Started-with-Quad-SDK) for installation, dependency, and unit testing information. You need to build from the noetic branch of Quad-SDK and it requires ROS Noetic on Ubuntu 20.04. All other dependencies are installed with the included setup script.
 
-### Default Quad-SDK
-Refer to the [Quad-SDK Wiki](https://github.com/robomechanics/quad-sdk/wiki/1.-Getting-Started-with-Quad-SDK) for installation, dependency, and unit testing information. Currently Quad-SDK requires ROS Melodic on Ubuntu 18.04. All other dependencies are installed with the included setup script.
-
-### Current fork
+## Current fork dependecies
 
 ### Installation Instructions for OSQP and OSQP-Eigen
 
